@@ -1,0 +1,89 @@
+# token-dashboard 配置示例
+# 用法：复制为 config.yaml 后按需修改；敏感信息放 .env（本文件不含密钥）
+
+server:
+  host: 127.0.0.1        # 只监听本机
+  port: 8787
+
+storage:
+  db_path: ../data/usage.db     # SQLite 单文件
+
+# ---------- 采集器（本地数据源） ----------
+collectors:
+  claude_code:
+    enabled: true
+    paths:
+      - ~/.claude/projects        # 会话 JSONL（含 message.usage）
+    # 可选：实时模式，让 Claude Code 通过 OTLP 推事件到本工具
+    otel_listen: null             # 例如 127.0.0.1:4318（需在 Claude Code 侧设 CLAUDE_CODE_ENABLE_TELEMETRY=1）
+
+  codex:
+    enabled: true
+    paths:
+      - ~/.codex/sessions
+      - ~/.codex/archived_sessions
+
+  cc_switch:
+    enabled: true
+    db_path: ~/.cc-switch/cc-switch.db
+    read_only: true               # 只读打开；不读取密钥字段
+    include:
+      - usage_daily_rollups       # 历史按天汇总（含渠道归属）
+      - proxy_request_logs        # 逐请求日志（若曾开启代理）
+      - providers                 # 渠道注册表（名称/倍率/限额，不含密钥）
+
+  dsh:
+    enabled: true
+    paths: [~/.dsh/sessions]      # 会话为 zstd 压缩（依赖 zstandard）
+
+  workbuddy:
+    enabled: true
+    paths: [~/.workbuddy/projects]  # 会话 JSONL，用量在 providerData.usage / rawUsage
+
+  antigravity:
+    enabled: false                # 候选：~/.gemini/antigravity（ccusage 已支持，可走 ccusage 桥接）
+    paths: [~/.gemini/antigravity]
+
+  ccusage_bridge:                 # 长尾 harness 兜底：调用 ccusage --json
+    enabled: true
+    sources: [gemini, kimi, qwen, opencode, goose, amp, droid]   # 按需裁剪
+    command: npx -y ccusage@latest
+
+# ---------- 渠道（服务端数据源） ----------
+channels:
+  - id: openrouter
+    type: openrouter
+    enabled: false
+    api_key_env: OPENROUTER_MANAGEMENT_KEY   # 管理密钥；只读用量
+    # GET /api/v1/activity（按天/按模型）；POST /api/v1/analytics/query（自定义维度）
+
+  - id: anthropic-official
+    type: anthropic-admin
+    enabled: false
+    api_key_env: ANTHROPIC_ADMIN_KEY          # Usage & Cost API（需 Admin key）
+
+  - id: relay-example
+    type: newapi-compatible                   # one-api / new-api 系中转站
+    enabled: false
+    base_url: https://your-relay.example.com
+    admin_token_env: RELAY_EXAMPLE_TOKEN
+    cost_multiplier: 0.6                      # 渠道倍率（0.6 = 官方价 6 折），用于成本估算
+
+# ---------- 价格 ----------
+pricing:
+  primary: litellm                # 内置 LiteLLM 价表快照
+  fallback: [models_dev, cc_switch]
+  overrides_file: pricing.overrides.yaml   # 别名模型（如 gemini-pro-agent）手动定价
+  currency: USD
+
+# ---------- 去重与口径 ----------
+dedup:
+  # 每条流（harness × 渠道）只认一个权威源，避免重复计数
+  priority: [local_log, proxy_log, channel_api, manual]
+  reconcile: true                 # 多源同时有数据时输出对账报告而非合并
+
+# ---------- 面板 ----------
+ui:
+  timezone: Asia/Shanghai
+  theme: auto
+  default_range: 30d

@@ -1,0 +1,29 @@
+[project]
+name = "token-dashboard"
+version = "0.1.0"
+description = "多渠道 × 多 Harness 的本地 Token 用量聚合面板"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pyyaml>=6.0",
+    "tzdata>=2024.1",
+    "zstandard>=0.25.0",
+    "pillow>=12.3.0",
+]
+
+[project.scripts]
+token-dashboard = "token_dashboard.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/token_dashboard"]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.22.3",
+]

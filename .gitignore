@@ -1,0 +1,28 @@
+# 数据与本地配置
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+config/config.yaml
+.env
+pricing.overrides.yaml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.uv/
+
+# 打包产物（exe 体积大，用 build_exe.ps1 现生成，不进仓库）
+build/
+dist/
+*.log
+
+# Node（如后续引入前端构建）
+node_modules/
+
+# 杂项
+.DS_Store
+Thumbs.db

@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Token Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="/static/echarts.min.js"></script>
+<style>
+  /* ---------- 色彩系统：一处改，全站生效 ---------- */
+  :root {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --surface-2: #1d222c;
+    --border: #262b36;
+    --border-strong: #2d3442;
+    --text: #e8eaf0;
+    --muted: #8b93a7;
+    --faint: #5c6478;
+    --accent: #3b82f6;
+    --accent-strong: #1d4ed8;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --danger: #f87171;
+    --shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 6px 18px rgba(0, 0, 0, .18);
+    --radius: 12px;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef1f5;
+    --border: #e2e6ec;
+    --border-strong: #cfd6e0;
+    --text: #1a1f29;
+    --muted: #667085;
+    --faint: #98a2b3;
+    --accent: #2563eb;
+    --accent-strong: #1d4ed8;
+    --ok: #16a34a;
+    --warn: #b45309;
+    --danger: #dc2626;
+    --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 4px 14px rgba(16, 24, 40, .06);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0;
+         background: var(--bg); color: var(--text); font-size: 14px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 22px 40px; }
+
+  /* ---------- 页头 ---------- */
+  .top { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; justify-content: space-between; }
+  h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: .2px; }
+  .sub { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  .actions { display: flex; gap: 8px; }
+
+  /* ---------- 筛选条（吸顶） ---------- */
+  .bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 10px;
+         align-items: center; background: var(--surface);
+         background: color-mix(in srgb, var(--surface) 88%, transparent);
+         backdrop-filter: blur(10px); border: 1px solid var(--border);
+         border-radius: var(--radius); padding: 9px 12px; margin: 14px 0 16px; box-shadow: var(--shadow); }
+  .bar label { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  select, input[type=date], button { background: var(--bg); color: var(--text);
+         border: 1px solid var(--border-strong); border-radius: 8px; padding: 5px 9px; font-size: 13px;
+         font-family: inherit; transition: border-color .15s, background .15s, color .15s; }
+  select:hover, input[type=date]:hover { border-color: var(--accent); }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ghost { background: var(--surface); }
+  /* 分段控制器 */
+  .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--border-strong);
+         border-radius: 9px; padding: 2px; gap: 2px; }
+  .seg button { border: 0; background: transparent; border-radius: 7px; padding: 4px 11px;
+                font-size: 12.5px; color: var(--muted); }
+  .seg button:hover { color: var(--text); background: var(--surface-2); }
+  .seg button.on { background: var(--accent); color: #fff; font-weight: 500; }
+  .sep { width: 1px; height: 20px; background: var(--border); }
+
+  /* ---------- KPI 卡片 ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+  .card::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px;
+                  background: linear-gradient(90deg, transparent, rgba(255,255,255,.10) 20%, rgba(255,255,255,.10) 80%, transparent); }
+  :root[data-theme="light"] .card::before { background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent); }
+  .card .k { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .card .v { font-size: 30px; font-weight: 600; margin-top: 6px; letter-spacing: -.5px;
+             font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .card .n { font-size: 12px; color: var(--faint); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .card.primary .v { color: var(--accent); }
+  .card.clickable { cursor: pointer; }
+  .card.clickable:hover { border-color: var(--accent); }
+
+  /* ---------- 状态条 ---------- */
+  .statusbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+          background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px; }
+  .chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chip.ok { color: var(--ok); border-color: var(--border); }
+  .chip.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+  .chip.warn { color: var(--warn); border-color: var(--border); background: var(--surface); }
+  .chip.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+               background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+
+  /* ---------- 面板 / 图表 ---------- */
+  .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+           padding: 13px 15px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  .panel h2 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 0 0 10px; display: flex;
+              align-items: center; gap: 8px; }
+  .panel h2 .tag { font-size: 11px; color: var(--faint); border: 1px solid var(--border);
+                   border-radius: 999px; padding: 0 7px; }
+  .chartbox { position: relative; }
+  .chart { width: 100%; height: 280px; }
+  .chart.short { height: 240px; }
+  .empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+           justify-content: center; gap: 4px; color: var(--faint); font-size: 12px; text-align: center;
+           pointer-events: none; }
+  .chartbox.is-empty .empty { display: flex; }
+  .empty .ico { font-size: 26px; opacity: .5; }
+
+  /* ---------- 表格 ---------- */
+  .tablewrap { max-height: 360px; overflow: auto; }
+  .tablewrap.x { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12.5px;
+           white-space: nowrap; }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  tbody tr:hover td { background: var(--surface-2); }
+  td.dim { color: var(--muted); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .copy { cursor: pointer; border-bottom: 1px dashed var(--border-strong); }
+  .copy:hover { color: var(--accent); border-color: var(--accent); }
+  .badge { display: inline-block; font-size: 11px; color: var(--muted); border: 1px solid var(--border-strong);
+           border-radius: 999px; padding: 0 7px; margin-left: 6px; }
+  .muted { color: var(--muted); }
+
+  /* ---------- 骨架屏 ---------- */
+  .sk-line { height: 30px; margin-top: 8px; border-radius: 7px;
+             background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+             background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+  @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+  @media (prefers-reduced-motion: reduce) { .sk-line { animation: none; } }
+
+  /* ---------- 提示 ---------- */
+  #toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 12px);
+           background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong);
+           border-radius: 9px; padding: 8px 14px; font-size: 12.5px; opacity: 0; pointer-events: none;
+           transition: opacity .18s, transform .18s; box-shadow: 0 8px 26px rgba(0,0,0,.3); z-index: 50; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  footer { margin-top: 18px; font-size: 12px; color: var(--faint); }
+  @media (max-width: 620px) {
+    .wrap { padding: 14px; }
+    .card .v { font-size: 24px; }
+    .bar { gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Token Dashboard</h1>
+      <div class="sub" id="sub">加载中…</div>
+    </div>
+    <div class="actions">
+      <button class="ghost" id="btnRefresh" title="立即重新拉取数据">↻ 刷新</button>
+      <button class="ghost" id="btnTheme" title="切换浅色 / 深色主题">◐ 主题</button>
+    </div>
+  </div>
+
+  <div class="bar">
+    <div class="seg" id="presets">
+      <button data-preset="7">近 7 天</button>
+      <button data-preset="30">近 30 天</button>
+      <button data-preset="all" class="on">全部</button>
+    </div>
+    <span class="sep"></span>
+    <label>从 <input type="date" id="fSince"></label>
+    <label>到 <input type="date" id="fUntil"></label>
+    <span class="sep"></span>
+    <label>Harness <select id="fHarness"><option value="">全部</option></select></label>
+    <label>趋势分组 <select id="fDim">
+      <option value="harness">按 harness</option>
+      <option value="model">按模型</option>
+    </select></label>
+  </div>
+
+  <div class="cards" id="cards">
+    <div class="card"><div class="k">今日 Tokens</div><div class="sk-line"></div></div>
+    <div class="card"><div class="k">近 7 天</div><div class="sk-line"></div></div>
+    <div class="card"><div class="k">全部 Tokens</div><div class="sk-line"></div></div>
+    <div class="card"><div class="k">全部成本</div><div class="sk-line"></div></div>
+  </div>
+  <div class="statusbar" id="status"><span class="chip">正在读取本地数据…</span></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>每日用量趋势 <span class="tag" id="dimLabel">按 harness</span></h2>
+      <div class="chartbox" id="boxDaily">
+        <div class="chart" id="chartDaily"></div>
+        <div class="empty"><div class="ico">◔</div><div>暂无数据</div><div>先运行 token-dashboard scan</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>模型分布 <span class="tag">按 tokens</span></h2>
+      <div class="chartbox" id="boxModels">
+        <div class="chart" id="chartModels"></div>
+        <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>项目分布 <span class="tag">Top 10</span></h2>
+    <div class="chartbox" id="boxProjects">
+      <div class="chart short" id="chartProjects"></div>
+      <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>会话明细 <span class="tag">最近 30 个</span></h2>
+    <div class="tablewrap"><table id="sessions">
+      <thead><tr><th class="l">会话</th><th class="l">Harness</th><th class="l">项目</th><th class="l">开始</th><th class="l">结束</th><th>事件</th><th>Tokens</th><th>成本</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="panel">
+    <h2>日明细</h2>
+    <div class="tablewrap x"><table id="daily">
+      <thead><tr><th class="l">日期</th><th>输入</th><th>缓存读</th><th>缓存写</th><th>输出</th><th>推理</th><th>合计</th><th>成本</th><th>未定价</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="panel" id="channelPanel" style="display:none">
+    <h2>渠道视图 <span class="tag">来自 cc-switch · 独立口径，不与上面的 harness 总量合并</span></h2>
+    <div class="tablewrap"><table id="channels">
+      <thead><tr><th class="l">渠道</th><th>请求数</th><th>输入</th><th>缓存读</th><th>缓存写</th><th>输出</th><th>成本</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <footer>数据全部来自本机 · 仅监听 127.0.0.1 · 面板由 token-dashboard 提供</footer>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ================= 工具 ================= */
+const esc = v => String(v === null || v === undefined ? "" : v)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+const isNum = n => n !== null && n !== undefined && n !== "";
+const fmt = n => isNum(n) ? Number(n).toLocaleString("en-US") : "-";
+const money = n => isNum(n) ? "$" + Number(n).toFixed(2) : "-";
+
+/** 紧凑数字：与桌面小组件、图表坐标轴同一口径（1 位小数 + B/M/K）。 */
+function compact(n) {
+  if (!isNum(n)) return "-";
+  n = Number(n);
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n / 1e9).toFixed(1) + "B";
+  if (abs >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (abs >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return String(Math.round(n));
+}
+/** 坐标轴用：整数刻度去掉多余的 .0（300.0M → 300M）。 */
+const compactAxis = n => compact(n).replace(/\.0([BMK])$/, "$1");
+
+/** 本地日期（YYYY-MM-DD）。不能用 toISOString：那是 UTC，UTC+8 早上会少算一天。 */
+function localDate(d) {
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function daysAgo(n) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - n); return localDate(d); }
+
+/** 后端存的是 UTC ISO；没有时区信息时按 UTC 解释。 */
+function parseTs(iso) {
+  if (!iso) return null;
+  const s = String(iso);
+  const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
+  return isNaN(d.getTime()) ? null : d;
+}
+function relTime(iso) {
+  const d = parseTs(iso);
+  if (!d) return "-";
+  const s = Math.round((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return "刚刚";
+  if (s < 3600) return Math.floor(s / 60) + " 分钟前";
+  if (s < 86400) return Math.floor(s / 3600) + " 小时前";
+  if (s < 86400 * 30) return Math.floor(s / 86400) + " 天前";
+  return d.toLocaleDateString("zh-CN");
+}
+function fullTime(iso) {
+  const d = parseTs(iso);
+  return d ? d.toLocaleString("zh-CN", { hour12: false }) : "-";
+}
+/** 项目路径只显示最后两段（原来的 slice(-40) 会从目录名中间切断）。 */
+function shortPath(p) {
+  if (!p) return "-";
+  const parts = String(p).split(/[\\/]+/).filter(Boolean);
+  return parts.length <= 2 ? parts.join("/") || "-" : "…/" + parts.slice(-2).join("/");
+}
+
+/* ================= 主题 ================= */
+const mq = window.matchMedia("(prefers-color-scheme: light)");
+function currentTheme() {
+  const saved = localStorage.getItem("td-theme");
+  if (saved === "light" || saved === "dark") return saved;
+  return mq.matches ? "light" : "dark";
+}
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  document.getElementById("btnTheme").textContent = t === "light" ? "☀ 浅色" : "☾ 深色";
+}
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ================= 稳定配色：同一 key 在任何图里颜色一致 ================= */
+const PALETTE = ["#3b82f6", "#22c55e", "#eab308", "#f97316", "#a855f7", "#06b6d4",
+                 "#ef4444", "#84cc16", "#ec4899", "#14b8a6", "#8b5cf6", "#0ea5e9"];
+const colorMap = new Map();
+function colorFor(key) {
+  const k = String(key === null || key === undefined ? "-" : key);
+  if (colorMap.has(k)) return colorMap.get(k);
+  const used = new Set(colorMap.values());
+  let h = 0;
+  for (const ch of k) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  let idx = h % PALETTE.length;
+  for (let i = 0; i < PALETTE.length && used.has(PALETTE[idx]); i++) idx = (idx + 1) % PALETTE.length;
+  colorMap.set(k, PALETTE[idx]);
+  return PALETTE[idx];
+}
+
+/* ================= 状态 ================= */
+const state = { harness: "", since: "", until: "", dim: "harness" };
+const PRESET_DAYS = { "7": 6, "30": 29 };
+
+function qs(extra = {}) {
+  const p = new URLSearchParams();
+  const o = Object.assign({ harness: state.harness, since: state.since, until: state.until }, extra);
+  for (const k in o) if (o[k]) p.set(k, o[k]);
+  return p.toString();
+}
+async function jget(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + " -> " + r.status);
+  return r.json();
+}
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 1600);
+}
+function copyText(text) {
+  const done = () => toast("已复制：" + text);
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done, () => toast("复制失败"));
+    return;
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) { toast("复制失败"); }
+  document.body.removeChild(ta);
+}
+
+/* ================= 图表 ================= */
+let cDaily, cModels, cProjects;
+let lastData = null;
+
+function chartTheme() {
+  return {
+    text: cssVar("--text"), muted: cssVar("--muted"), border: cssVar("--border"),
+    surface2: cssVar("--surface-2"), accent: cssVar("--accent"),
+  };
+}
+function tipBase() {
+  const t = chartTheme();
+  return {
+    backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1,
+    textStyle: { color: t.text, fontSize: 12 },
+    extraCssText: "border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.28);padding:6px 10px;",
+  };
+}
+function axisCommon() {
+  const t = chartTheme();
+  return {
+    axisLabel: { color: t.muted, fontSize: 10 },
+    axisLine: { lineStyle: { color: t.border } },
+    splitLine: { lineStyle: { color: t.border } },
+  };
+}
+
+function initCharts() {
+  cDaily = echarts.init(document.getElementById("chartDaily"));
+  cModels = echarts.init(document.getElementById("chartModels"));
+  cProjects = echarts.init(document.getElementById("chartProjects"));
+  window.addEventListener("resize", () => {
+    cDaily.resize(); cModels.resize(); cProjects.resize();
+  });
+}
+function setEmpty(id, empty) {
+  document.getElementById(id).classList.toggle("is-empty", !!empty);
+}
+/** 无数据时不 setOption（空饼图/空坐标轴会留下奇怪的残影），直接清空并显示占位。 */
+function blank(chart, boxId) {
+  chart.clear();
+  setEmpty(boxId, true);
+}
+
+function renderDailyChart(rows) {
+  const t = chartTheme();
+  const dates = [...new Set(rows.map(r => r.date))].sort();
+  if (!dates.length) return blank(cDaily, "boxDaily");
+  const keys = [...new Set(rows.map(r => r.key))];
+  const totals = {};
+  rows.forEach(r => { totals[r.key] = (totals[r.key] || 0) + (r.tokens || 0); });
+  const top = keys.slice().sort((a, b) => totals[b] - totals[a]).slice(0, 8);
+  const other = keys.filter(k => !top.includes(k));
+  const map = {};
+  rows.forEach(r => { map[r.date + "|" + r.key] = r.tokens; });
+  const series = top.map(k => ({
+    name: k, type: "bar", stack: "t", barMaxWidth: 22,
+    itemStyle: { color: colorFor(k), borderRadius: [3, 3, 0, 0] },
+    emphasis: { focus: "series" },
+    data: dates.map(d => map[d + "|" + k] || 0),
+  }));
+  if (other.length) {
+    series.push({
+      name: "其他", type: "bar", stack: "t", barMaxWidth: 22,
+      itemStyle: { color: "#4b5563", borderRadius: [3, 3, 0, 0] },
+      data: dates.map(d => other.reduce((s, k) => s + (map[d + "|" + k] || 0), 0)),
+    });
+  }
+  const ax = axisCommon();
+  cDaily.setOption({
+    tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmt,
+      axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.12)" } } }),
+    legend: { textStyle: { color: t.muted, fontSize: 11 }, top: 0, icon: "roundRect",
+              itemWidth: 10, itemHeight: 10 },
+    grid: { left: 58, right: 12, top: 30, bottom: 28 },
+    xAxis: Object.assign({ type: "category", data: dates }, ax,
+      { axisLabel: { color: t.muted, fontSize: 10, hideOverlap: true } }),
+    yAxis: Object.assign({ type: "value" }, ax,
+      { axisLabel: { color: t.muted, fontSize: 10, formatter: compactAxis } }),
+    series,
+  }, true);
+  setEmpty("boxDaily", false);
+}
+
+function renderModelChart(rows) {
+  const t = chartTheme();
+  const data = rows.slice(0, 8).map(r => ({
+    name: r.key, value: r.tokens, itemStyle: { color: colorFor(r.key) },
+  }));
+  if (!data.length) return blank(cModels, "boxModels");
+  cModels.setOption({
+    tooltip: Object.assign(tipBase(), { trigger: "item", valueFormatter: fmt }),
+    series: [{
+      type: "pie", radius: ["45%", "72%"], center: ["50%", "52%"], data,
+      itemStyle: { borderColor: cssVar("--surface"), borderWidth: 2 },
+      label: { color: t.text, fontSize: 11, formatter: "{b}\n{d}%" },
+      labelLine: { lineStyle: { color: t.border } },
+      emphasis: { scale: true, scaleSize: 6,
+                  itemStyle: { shadowBlur: 14, shadowColor: "rgba(0,0,0,.35)" } },
+    }],
+  }, true);
+  setEmpty("boxModels", false);
+}
+
+function renderProjectChart(rows) {
+  const t = chartTheme();
+  const data = rows.slice(0, 10).reverse();
+  if (!data.length) return blank(cProjects, "boxProjects");
+  const ax = axisCommon();
+  // 项目只出现在这一张图里，用强调色统一（跨图一致的是模型/harness 这类多图共现的 key）
+  const grad = new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+    { offset: 0, color: t.accent },
+    { offset: 1, color: t.accent + "99" },
+  ]);
+  cProjects.setOption({
+    tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmt,
+      axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.12)" } } }),
+    grid: { left: 220, right: 40, top: 10, bottom: 22 },
+    xAxis: Object.assign({ type: "value" }, ax,
+      { axisLabel: { color: t.muted, fontSize: 10, formatter: compactAxis } }),
+    yAxis: Object.assign({ type: "category", data: data.map(r => r.key) }, ax,
+      { axisLabel: { color: t.muted, fontSize: 10, width: 200, overflow: "truncate" },
+        splitLine: { show: false } }),
+    series: [{
+      type: "bar", data: data.map(r => r.tokens),
+      barMaxWidth: 14, itemStyle: { color: grad, borderRadius: [0, 4, 4, 0] },
+    }],
+  }, true);
+  setEmpty("boxProjects", false);
+}
+
+/* ================= 卡片 / 状态条 ================= */
+function mainCards(s) {
+  const all = s.all || {}, today = s.today || {}, d7 = s.last7d || {}, range = s.range || {};
+  // 没有任何事件时展示 0 而不是 “-”；有事件但没算出售价时保留 “-”（表示缺价格）
+  const tk = o => (o.events ? o.tokens : 0);
+  const cards = [
+    { k: "今日 Tokens", v: compact(tk(today)), n: "精确 " + fmt(tk(today)), primary: true },
+    { k: "近 7 天", v: compact(tk(d7)), n: "精确 " + fmt(tk(d7)) },
+    { k: "全部 Tokens", v: compact(tk(all)), n: "精确 " + fmt(tk(all)) },
+    { k: "全部成本", v: all.events ? money(all.cost) : money(0),
+      n: (all.events || 0).toLocaleString("en-US") + " 条事件" },
+  ];
+  if (state.harness || state.since || state.until) {
+    const bits = [];
+    if (state.harness) bits.push(state.harness);
+    if (state.since) bits.push(state.since + " 起");
+    if (state.until) bits.push("至 " + state.until);
+    cards.push({ k: "当前筛选", v: compact(tk(range)), n: bits.join(" · ") || "全部", filtered: true });
+  }
+  document.getElementById("cards").innerHTML = cards.map(c =>
+    `<div class="card${c.primary ? " primary" : ""}">
+       <div class="k">${esc(c.k)}</div>
+       <div class="v">${esc(c.v)}</div>
+       <div class="n">${esc(c.n)}</div>
+     </div>`).join("");
+}
+
+function statusBar(s, meta) {
+  const all = s.all || {}, unpriced = all.unpriced || 0;
+  const d30 = (s.last30d || {}).tokens;
+  const chips = [
+    `<span class="chip">近 30 天 <b>${esc(compact(d30))}</b></span>`,
+    `<span class="chip">事件 <b>${esc(fmt(all.events))}</b></span>`,
+    unpriced > 0
+      ? `<span class="chip warn" title="这些事件的模型不在价格表里，成本未计入">未定价事件 <b>${esc(fmt(unpriced))}</b> ⚠</span>`
+      : `<span class="chip ok">未定价事件 <b>0</b> ✓</span>`,
+    `<span class="chip">时区 <b>${esc(s.timezone || "-")}</b></span>`,
+    `<span class="chip">数据范围 <b>${esc(meta.min_date || "-")} ~ ${esc(meta.max_date || "-")}</b></span>`,
+    `<span class="chip">渠道数据 <b>${esc(fmt(meta.channel_rows || 0))}</b> 行</span>`,
+  ];
+  document.getElementById("status").innerHTML = chips.join("");
+}
+
+/* ================= 表格 ================= */
+function sessionRows(rows) {
+  if (!rows.length) {
+    return `<tr><td class="l muted" colspan="8">暂无会话数据 —— 先运行 token-dashboard scan</td></tr>`;
+  }
+  return rows.map(r => {
+    const sid = r.session_id || "-";
+    const pseudo = r.pseudo ? `<span class="badge" title="该来源的日志没有 session_id，按「来源 + 文件」聚合">无会话</span>` : "";
+    return `<tr>
+      <td class="l"><span class="copy mono" data-copy="${esc(sid)}" title="点击复制：${esc(sid)}">${esc(sid.slice(0, 12))}</span>${pseudo}</td>
+      <td class="l">${esc(r.harness || "-")}</td>
+      <td class="l" title="${esc(r.project || "")}">${esc(shortPath(r.project))}</td>
+      <td class="l dim" title="${esc(fullTime(r.started))}">${esc(relTime(r.started))}</td>
+      <td class="l dim" title="${esc(fullTime(r.ended))}">${esc(relTime(r.ended))}</td>
+      <td>${esc(fmt(r.events))}</td>
+      <td>${esc(fmt(r.tokens))}</td>
+      <td>${esc(money(r.cost))}</td>
+    </tr>`;
+  }).join("");
+}
+
+function dailyRows(rows) {
+  if (!rows.length) {
+    return `<tr><td class="l muted" colspan="9">暂无数据 —— 先运行 token-dashboard scan</td></tr>`;
+  }
+  return rows.map(r => `<tr>
+      <td class="l">${esc(r.date)}</td>
+      <td>${esc(fmt(r.input_tokens))}</td>
+      <td>${esc(fmt(r.cache_read_tokens))}</td>
+      <td>${esc(fmt(r.cache_write_tokens))}</td>
+      <td>${esc(fmt(r.output_tokens))}</td>
+      <td>${esc(fmt(r.reasoning_tokens))}</td>
+      <td><b>${esc(fmt(r.tokens))}</b></td>
+      <td>${esc(money(r.cost_usd))}</td>
+      <td class="${r.unpriced ? "" : "dim"}">${esc(fmt(r.unpriced))}</td>
+    </tr>`).join("");
+}
+
+function channelRows(rows) {
+  return rows.map(r => `<tr>
+      <td class="l">${esc(r.channel)}</td>
+      <td>${esc(fmt(r.requests))}</td>
+      <td>${esc(fmt(r.input_tokens))}</td>
+      <td>${esc(fmt(r.cache_read_tokens))}</td>
+      <td>${esc(fmt(r.cache_write_tokens))}</td>
+      <td>${esc(fmt(r.output_tokens))}</td>
+      <td>${esc(money(r.cost_usd))}</td>
+    </tr>`).join("");
+}
+
+/* ================= 主流程 ================= */
+let lastUpdated = null;
+
+function setFreshness() {
+  const el = document.getElementById("sub");
+  if (!el._meta) return;
+  const secs = lastUpdated ? Math.round((Date.now() - lastUpdated) / 1000) : null;
+  const ago = secs === null ? "" : (secs < 5 ? " · 刚刚更新" : ` · ${secs} 秒前更新`);
+  el.textContent = el._meta + ago;
+}
+
+async function refresh(manual) {
+  const btn = document.getElementById("btnRefresh");
+  if (manual) btn.disabled = true;
+  try {
+    const [s, meta, daily, models, projects, sessions, dAll, ch] = await Promise.all([
+      jget("/api/summary?" + qs()),
+      jget("/api/meta"),
+      jget("/api/daily?" + qs({ dim: state.dim })),
+      jget("/api/breakdown?" + qs({ dim: "model", limit: 10 })),
+      jget("/api/breakdown?" + qs({ dim: "project", limit: 10 })),
+      jget("/api/sessions?" + qs({ limit: 30 })),
+      jget("/api/daily?" + qs({ dim: "total" })),
+      jget("/api/channels?" + qs()),
+    ]);
+    lastData = { s, meta, daily, models, projects, sessions, dAll, ch };
+
+    mainCards(s);
+    statusBar(s, meta);
+    renderDailyChart(daily);
+    renderModelChart(models);
+    renderProjectChart(projects);
+
+    document.querySelector("#sessions tbody").innerHTML = sessionRows(sessions);
+    document.querySelector("#daily tbody").innerHTML = dailyRows(dAll);
+    document.getElementById("channelPanel").style.display =
+      (ch.summary && ch.summary.length) ? "" : "none";
+    if (ch.summary && ch.summary.length) {
+      document.querySelector("#channels tbody").innerHTML = channelRows(ch.summary);
+    }
+
+    const hs = document.getElementById("fHarness");
+    if (hs.options.length <= 1 && meta.harnesses) {
+      meta.harnesses.forEach(h => {
+        const o = document.createElement("option");
+        o.value = h; o.textContent = h; hs.appendChild(o);
+      });
+      if (meta.min_date) {
+        document.getElementById("fSince").min = meta.min_date;
+        document.getElementById("fUntil").min = meta.min_date;
+      }
+      if (meta.max_date) {
+        document.getElementById("fSince").max = meta.max_date;
+        document.getElementById("fUntil").max = meta.max_date;
+      }
+    }
+    document.getElementById("sub")._meta =
+      `时区 ${s.timezone} · 数据范围 ${meta.min_date || "-"} ~ ${meta.max_date || "-"}`;
+    lastUpdated = Date.now();
+    setFreshness();
+    if (manual) toast("已刷新");
+  } catch (e) {
+    document.getElementById("sub").textContent = "加载失败：" + e.message;
+    document.getElementById("cards").innerHTML =
+      `<div class="card"><div class="k">加载失败</div><div class="v">—</div>
+       <div class="n">${esc(e.message)}</div></div>`;
+    document.getElementById("status").innerHTML = "";
+  } finally {
+    if (manual) btn.disabled = false;
+  }
+}
+
+/* ---------- 筛选交互 ---------- */
+function syncPresets() {
+  const btns = document.querySelectorAll("#presets button");
+  let matched = null;
+  if (!state.since && !state.until) matched = "all";
+  else if (!state.until) {
+    for (const p in PRESET_DAYS) if (state.since === daysAgo(PRESET_DAYS[p])) { matched = p; break; }
+  }
+  btns.forEach(b => b.classList.toggle("on", b.dataset.preset === matched));
+}
+
+function bind() {
+  document.getElementById("fHarness").onchange = e => { state.harness = e.target.value; refresh(); };
+  document.getElementById("fSince").onchange = e => {
+    state.since = e.target.value; syncPresets(); refresh();
+  };
+  document.getElementById("fUntil").onchange = e => {
+    state.until = e.target.value; syncPresets(); refresh();
+  };
+  document.getElementById("fDim").onchange = e => {
+    state.dim = e.target.value;
+    document.getElementById("dimLabel").textContent = state.dim === "model" ? "按模型" : "按 harness";
+    refresh();
+  };
+  document.querySelectorAll("#presets button").forEach(b => b.onclick = () => {
+    const p = b.dataset.preset;
+    if (p === "all") { state.since = ""; state.until = ""; }
+    else { state.since = daysAgo(PRESET_DAYS[p]); state.until = ""; }
+    document.getElementById("fSince").value = state.since;
+    document.getElementById("fUntil").value = state.until;
+    syncPresets();
+    refresh();
+  });
+  document.getElementById("btnRefresh").onclick = () => refresh(true);
+  document.getElementById("btnTheme").onclick = () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    localStorage.setItem("td-theme", next);
+    applyTheme(next);
+    if (lastData) {
+      renderDailyChart(lastData.daily);
+      renderModelChart(lastData.models);
+      renderProjectChart(lastData.projects);
+    }
+  };
+  // 会话 id 点击复制
+  document.getElementById("sessions").addEventListener("click", e => {
+    const el = e.target.closest("[data-copy]");
+    if (el) copyText(el.dataset.copy);
+  });
+}
+
+/* ---------- 启动 ---------- */
+applyTheme(currentTheme());
+if (mq.addEventListener) mq.addEventListener("change", () => {
+  if (!localStorage.getItem("td-theme")) applyTheme(currentTheme());
+});
+initCharts();
+bind();
+syncPresets();
+refresh();
+setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000);
+setInterval(setFreshness, 1000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+</script>
+</body>
+</html>
