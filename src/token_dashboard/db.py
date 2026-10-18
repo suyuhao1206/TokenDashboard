@@ -132,6 +132,10 @@ class Store:
             self.conn = sqlite3.connect(read_only_uri(p), uri=True, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row
             self.conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+            # 大 GROUP BY（如会话明细）需要临时 b-tree；默认会落到磁盘临时文件，
+            # 而数据库路径含中文时 SQLite 的临时文件名解析会失败（unable to open database file）。
+            # 本地库只有几万行，临时结果放内存即可，顺便更快。
+            self.conn.execute("PRAGMA temp_store=MEMORY")
             return
         p.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(p), check_same_thread=False)
@@ -140,6 +144,7 @@ class Store:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute("PRAGMA temp_store=MEMORY")
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 
@@ -312,6 +317,11 @@ class Store:
         sql = (
             "SELECT COUNT(*) AS events, "
             f"{_TOKENS} AS tokens, "
+            "SUM(input_tokens) AS input, "
+            "SUM(cache_read_tokens) AS cache_read, "
+            "SUM(cache_write_tokens) AS cache_write, "
+            "SUM(output_tokens) AS output, "
+            "SUM(reasoning_tokens) AS reasoning, "
             "SUM(cost_usd) AS cost, "
             "SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END) AS unpriced "
             "FROM usage_events WHERE 1=1" + frag
@@ -319,6 +329,40 @@ class Store:
         with self._lock:
             row = self.conn.execute(sql, args).fetchone()
         return dict(row) if row else {}
+
+    # ---------- 最近请求（分页） ----------
+    def recent_requests(self, page: int = 1, size: int = 20,
+                        since=None, until=None, harness=None) -> dict:
+        frag, args = self._filter(since, until, harness)
+        page = max(1, int(page))
+        size = min(200, max(1, int(size)))
+        with self._lock:
+            total = self.conn.execute(
+                "SELECT COUNT(*) FROM usage_events WHERE 1=1" + frag, args
+            ).fetchone()[0]
+            rows = self.conn.execute(
+                "SELECT ts, local_date, harness, model, raw_model, channel, project, "
+                "input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, "
+                "reasoning_tokens, cost_usd, session_id "
+                "FROM usage_events WHERE 1=1" + frag +
+                " ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?",
+                args + [size, (page - 1) * size],
+            ).fetchall()
+        return {"total": total, "page": page, "size": size,
+                "rows": [dict(r) for r in rows]}
+
+    # ---------- 活跃时段（按 UTC 小时聚合，调用方负责换算到本地时区） ----------
+    def hourly(self, since=None, until=None, harness=None) -> list[sqlite3.Row]:
+        frag, args = self._filter(since, until, harness)
+        sql = f"""
+        SELECT CAST(substr(ts, 12, 2) AS INTEGER) AS utc_hour,
+               COUNT(*) AS events, {_TOKENS} AS tokens
+        FROM usage_events
+        WHERE length(ts) >= 13{frag}
+        GROUP BY utc_hour
+        """
+        with self._lock:
+            return self.conn.execute(sql, args).fetchall()
 
     def meta(self) -> dict:
         with self._lock:

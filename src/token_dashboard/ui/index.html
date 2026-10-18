@@ -4,155 +4,288 @@
 <meta charset="utf-8">
 <title>Token Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<script>
+/* 在样式表之前定主题，浅色用户不会先看到一帧深色。 */
+try {
+  var savedTheme = localStorage.getItem("td-theme");
+  document.documentElement.dataset.theme = (savedTheme === "light" || savedTheme === "dark")
+    ? savedTheme
+    : (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+} catch (e) {}
+</script>
 <script src="/static/echarts.min.js"></script>
 <style>
-  /* ---------- 色彩系统：一处改，全站生效 ---------- */
+  /* ============================================================
+     设计令牌：颜色只在这里定义，下面一律用 var()。
+     新增颜色请先加令牌，不要在规则里写裸色值。
+     ============================================================ */
   :root {
-    --bg: #0f1115;
-    --surface: #171a21;
-    --surface-2: #1d222c;
-    --border: #262b36;
-    --border-strong: #2d3442;
+    --bg: #0d1017;
+    --surface: #141824;
+    --surface2: #1a1f2e;
+    --border: #232a3a;
+    --border-strong: #2e3749;
     --text: #e8eaf0;
     --muted: #8b93a7;
     --faint: #5c6478;
     --accent: #3b82f6;
-    --accent-strong: #1d4ed8;
-    --ok: #22c55e;
-    --warn: #f59e0b;
-    --danger: #f87171;
-    --shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 6px 18px rgba(0, 0, 0, .18);
+    --green: #22c55e;
+    --amber: #eab308;
+    --red: #ef4444;
+    --on-accent: #ffffff;
     --radius: 12px;
+    --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 8px 24px rgba(0, 0, 0, .18);
+    --shadow-pop: 0 12px 32px rgba(0, 0, 0, .38);
+    /* 热力图 5 档（由暗到亮） */
+    --hm0: #1c212b;
+    --hm1: #0e3a5c;
+    --hm2: #16639b;
+    --hm3: #2f8fdd;
+    --hm4: #6cb8ff;
     color-scheme: dark;
   }
   :root[data-theme="light"] {
-    --bg: #f5f6f8;
+    --bg: #f4f6f9;
     --surface: #ffffff;
-    --surface-2: #eef1f5;
-    --border: #e2e6ec;
-    --border-strong: #cfd6e0;
-    --text: #1a1f29;
+    --surface2: #eef1f6;
+    --border: #e3e7ee;
+    --border-strong: #ccd4e0;
+    --text: #161b26;
     --muted: #667085;
     --faint: #98a2b3;
     --accent: #2563eb;
-    --accent-strong: #1d4ed8;
-    --ok: #16a34a;
-    --warn: #b45309;
-    --danger: #dc2626;
+    --green: #15803d;
+    --amber: #a16207;
+    --red: #dc2626;
+    --on-accent: #ffffff;
     --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 4px 14px rgba(16, 24, 40, .06);
+    --shadow-pop: 0 12px 32px rgba(16, 24, 40, .16);
+    --hm0: #e9edf3;
+    --hm1: #c7e0f7;
+    --hm2: #8fc4ee;
+    --hm3: #4f9fe0;
+    --hm4: #1f6fb2;
     color-scheme: light;
   }
+
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body { font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0;
-         background: var(--bg); color: var(--text); font-size: 14px; }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 22px 40px; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 22px 40px; }
 
   /* ---------- 页头 ---------- */
-  .top { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; justify-content: space-between; }
-  h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: .2px; }
-  .sub { color: var(--muted); font-size: 12px; line-height: 1.7; }
-  .actions { display: flex; gap: 8px; }
+  .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start;
+         justify-content: space-between; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .2px; }
+  .sub { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.7;
+         font-variant-numeric: tabular-nums; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ---------- 控件 ---------- */
+  button { font: inherit; font-size: 12.5px; color: var(--text); background: var(--surface);
+           border: 1px solid var(--border-strong); border-radius: 8px; padding: 5px 11px;
+           cursor: pointer; transition: border-color .15s, background .15s, color .15s; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button:disabled { opacity: .42; cursor: not-allowed; }
+  button:disabled:hover { border-color: var(--border-strong); }
+  select, input[type=date] { font: inherit; font-size: 12.5px; color: var(--text);
+           background: var(--bg); border: 1px solid var(--border-strong); border-radius: 8px;
+           padding: 4px 8px; }
+  select:hover, input[type=date]:hover { border-color: var(--accent); }
+  select:focus-visible, input[type=date]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg);
+         border: 1px solid var(--border-strong); border-radius: 9px; }
+  .seg button { border: 0; background: transparent; border-radius: 7px;
+                padding: 3px 11px; font-size: 12px; color: var(--muted); }
+  .seg button:hover { color: var(--text); background: var(--surface2); }
+  .seg button.on { color: var(--on-accent); background: var(--accent); font-weight: 500; }
+  .seg.sm button { padding: 2px 8px; font-size: 11.5px; }
+  .sep { width: 1px; height: 20px; background: var(--border); }
 
   /* ---------- 筛选条（吸顶） ---------- */
   .bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 10px;
-         align-items: center; background: var(--surface);
+         align-items: center; margin: 14px 0; padding: 8px 12px;
+         background: var(--surface);
          background: color-mix(in srgb, var(--surface) 88%, transparent);
          backdrop-filter: blur(10px); border: 1px solid var(--border);
-         border-radius: var(--radius); padding: 9px 12px; margin: 14px 0 16px; box-shadow: var(--shadow); }
-  .bar label { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-  select, input[type=date], button { background: var(--bg); color: var(--text);
-         border: 1px solid var(--border-strong); border-radius: 8px; padding: 5px 9px; font-size: 13px;
-         font-family: inherit; transition: border-color .15s, background .15s, color .15s; }
-  select:hover, input[type=date]:hover { border-color: var(--accent); }
-  button { cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .ghost { background: var(--surface); }
-  /* 分段控制器 */
-  .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--border-strong);
-         border-radius: 9px; padding: 2px; gap: 2px; }
-  .seg button { border: 0; background: transparent; border-radius: 7px; padding: 4px 11px;
-                font-size: 12.5px; color: var(--muted); }
-  .seg button:hover { color: var(--text); background: var(--surface-2); }
-  .seg button.on { background: var(--accent); color: #fff; font-weight: 500; }
-  .sep { width: 1px; height: 20px; background: var(--border); }
+         border-radius: var(--radius); box-shadow: var(--shadow); }
+  .bar label { display: inline-flex; align-items: center; gap: 6px;
+               font-size: 12px; color: var(--muted); }
 
-  /* ---------- KPI 卡片 ---------- */
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
-  .card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--border);
-          border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
-  .card::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px;
-                  background: linear-gradient(90deg, transparent, rgba(255,255,255,.10) 20%, rgba(255,255,255,.10) 80%, transparent); }
-  :root[data-theme="light"] .card::before { background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent); }
-  .card .k { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  .card .v { font-size: 30px; font-weight: 600; margin-top: 6px; letter-spacing: -.5px;
-             font-variant-numeric: tabular-nums; line-height: 1.15; }
-  .card .n { font-size: 12px; color: var(--faint); margin-top: 3px; font-variant-numeric: tabular-nums; }
-  .card.primary .v { color: var(--accent); }
-  .card.clickable { cursor: pointer; }
-  .card.clickable:hover { border-color: var(--accent); }
+  /* ---------- Hero KPI ---------- */
+  .hero { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 1080px) { .hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); } }
+  .card { position: relative; overflow: hidden; padding: 14px 16px 13px;
+          background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius); box-shadow: var(--shadow); }
+  /* 顶部 2px 渐变高亮条 */
+  .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+                  background: linear-gradient(90deg, var(--accent), transparent 72%); }
+  .card.good::before { background: linear-gradient(90deg, var(--green), transparent 72%); }
+  .card.warn::before { background: linear-gradient(90deg, var(--amber), transparent 72%); }
+  .card .k { font-size: 12px; color: var(--muted); }
+  .card .v { margin-top: 7px; font-size: 28px; font-weight: 600; line-height: 1.2;
+             letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
+  .card.accent .v { color: var(--accent); }
+  .card.good .v { color: var(--green); }
+  .card.warn .v { color: var(--amber); }
+  /* 环比：这是用量统计不是股票，涨用绿、跌用红（约定写在注释里，避免以后误改） */
+  .card .d { display: flex; align-items: center; gap: 5px; margin-top: 5px;
+             font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .card .d.up { color: var(--green); }
+  .card .d.down { color: var(--red); }
+  .card .d.flat { color: var(--faint); }
+  .card .d .muted { color: var(--faint); font-size: 11px; }
+  .card .n { margin-top: 5px; font-size: 11.5px; color: var(--faint);
+             font-variant-numeric: tabular-nums; white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
+  .card .n.warnc { color: var(--amber); }
 
   /* ---------- 状态条 ---------- */
-  .statusbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
-          background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px; }
+  .statusbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px;
+          font-size: 11.5px; color: var(--muted); background: var(--surface);
+          border: 1px solid var(--border); border-radius: 999px; }
   .chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .chip.ok { color: var(--ok); border-color: var(--border); }
-  .chip.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
-  .chip.warn { color: var(--warn); border-color: var(--border); background: var(--surface); }
-  .chip.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
-               background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+  .chip.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 38%, var(--border)); }
+  .chip.warn { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--border));
+               background: color-mix(in srgb, var(--amber) 9%, var(--surface)); }
+  .chip.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); }
 
-  /* ---------- 面板 / 图表 ---------- */
+  /* ---------- 面板 / 网格 ---------- */
   .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-           padding: 13px 15px; margin-bottom: 14px; box-shadow: var(--shadow); }
-  .panel h2 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 0 0 10px; display: flex;
-              align-items: center; gap: 8px; }
-  .panel h2 .tag { font-size: 11px; color: var(--faint); border: 1px solid var(--border);
-                   border-radius: 999px; padding: 0 7px; }
+  .grid.even { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 900px) { .grid, .grid.even { grid-template-columns: minmax(0, 1fr); } }
+  .panel { min-width: 0; margin-bottom: 14px; padding: 14px 16px;
+           background: var(--surface); border: 1px solid var(--border);
+           border-radius: var(--radius); box-shadow: var(--shadow); }
+  .panel h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+              margin: 0 0 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .panel h2 .spacer { flex: 1; }
+  .tag { padding: 0 7px; font-size: 10.5px; font-weight: 400; line-height: 17px;
+         color: var(--faint); border: 1px solid var(--border); border-radius: 999px; }
   .chartbox { position: relative; }
   .chart { width: 100%; height: 280px; }
   .chart.short { height: 240px; }
-  .empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
-           justify-content: center; gap: 4px; color: var(--faint); font-size: 12px; text-align: center;
-           pointer-events: none; }
+  .empty { position: absolute; inset: 0; display: none; flex-direction: column;
+           align-items: center; justify-content: center; gap: 4px;
+           color: var(--faint); font-size: 12px; text-align: center; pointer-events: none; }
   .chartbox.is-empty .empty { display: flex; }
   .empty .ico { font-size: 26px; opacity: .5; }
 
+  /* ---------- 工作回溯热力图 ---------- */
+  .hm-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 258px; gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .hm-wrap { grid-template-columns: minmax(0, 1fr); gap: 14px; } }
+  .hm-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+  .hm-cols { width: max-content; }
+  .hm-months-row { display: flex; gap: 6px; }
+  .hm-spacer { flex: none; width: 16px; }
+  .hm-months { display: grid; grid-auto-flow: column; grid-auto-columns: 11px;
+               gap: 3px; height: 14px; }
+  .hm-month { font-size: 10px; line-height: 14px; color: var(--faint); white-space: nowrap; }
+  .hm-grid-row { display: flex; gap: 6px; align-items: flex-start; }
+  .hm-daylabels { flex: none; display: grid; grid-template-rows: repeat(7, 11px);
+                  gap: 3px; width: 16px; font-size: 9px; line-height: 11px;
+                  text-align: right; color: var(--faint); }
+  .hm-grid { display: grid; grid-template-rows: repeat(7, 11px); grid-auto-flow: column;
+             grid-auto-columns: 11px; gap: 3px; }
+  .hm-cell { width: 11px; height: 11px; border-radius: 2.5px; background: var(--hm0); }
+  .hm-cell.lv1 { background: var(--hm1); }
+  .hm-cell.lv2 { background: var(--hm2); }
+  .hm-cell.lv3 { background: var(--hm3); }
+  .hm-cell.lv4 { background: var(--hm4); }
+  .hm-cell.void { background: transparent; }
+  .hm-cell[data-d]:hover { outline: 1px solid var(--text); outline-offset: 1px; }
+  .hm-legend { display: flex; align-items: center; gap: 4px; margin-top: 10px;
+               padding-left: 22px; font-size: 11px; color: var(--faint); }
+  .hm-legend .hm-cell { flex: none; }
+  .hm-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px;
+              padding-left: 18px; border-left: 1px solid var(--border); }
+  @media (max-width: 860px) {
+    .hm-stats { padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--border); }
+  }
+  .hm-stat .k { font-size: 11.5px; color: var(--muted); }
+  .hm-stat .v { margin-top: 2px; font-size: 18px; font-weight: 600;
+                font-variant-numeric: tabular-nums; }
+  .hm-stat .n { margin-top: 1px; font-size: 11px; color: var(--faint);
+                font-variant-numeric: tabular-nums; }
+
   /* ---------- 表格 ---------- */
-  .tablewrap { max-height: 360px; overflow: auto; }
+  .tablewrap { max-height: 720px; overflow: auto; }
   .tablewrap.x { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12.5px;
-           white-space: nowrap; }
+  th, td { padding: 6px 9px; font-size: 12.5px; text-align: right; white-space: nowrap;
+           border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child, th.l, td.l { text-align: left; }
-  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); z-index: 1; }
-  tbody tr:hover td { background: var(--surface-2); }
+  th { position: sticky; top: 0; z-index: 1; font-weight: 500; color: var(--muted);
+       background: var(--surface); }
+  tbody tr:hover td { background: var(--surface2); }
   td.dim { color: var(--muted); }
-  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .empty-row { padding: 24px 0 !important; text-align: center !important; color: var(--faint); }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .faint { color: var(--faint); }
+  .good { color: var(--green); }
+  .warnc { color: var(--amber); }
   .copy { cursor: pointer; border-bottom: 1px dashed var(--border-strong); }
   .copy:hover { color: var(--accent); border-color: var(--accent); }
-  .badge { display: inline-block; font-size: 11px; color: var(--muted); border: 1px solid var(--border-strong);
-           border-radius: 999px; padding: 0 7px; margin-left: 6px; }
-  .muted { color: var(--muted); }
+  .badge { display: inline-block; margin-left: 6px; padding: 0 7px; font-size: 11px;
+           color: var(--muted); border: 1px solid var(--border-strong); border-radius: 999px; }
+  .hbadge { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 7px;
+            font-size: 11.5px; color: var(--text); background: var(--surface2);
+            border: 1px solid var(--border); border-radius: 999px; }
+  .hbadge i { display: block; flex: none; width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ---------- 分页 ---------- */
+  .pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+           justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .pager b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pg-btns { display: flex; gap: 6px; }
+  .pg-btns button { padding: 3px 10px; font-size: 12px; }
+
+  /* ---------- 折叠面板 ---------- */
+  details.panel { padding: 0; }
+  details.panel > summary { display: flex; align-items: center; gap: 8px; padding: 13px 16px;
+                            font-size: 13px; color: var(--muted); cursor: pointer;
+                            list-style: none; user-select: none; border-radius: var(--radius); }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::before { content: "▸"; font-size: 11px; color: var(--faint);
+                                    transition: transform .15s; }
+  details.panel[open] > summary::before { transform: rotate(90deg); }
+  details.panel > summary:hover { color: var(--text); }
+  details.panel .body { padding: 0 16px 14px; border-top: 1px solid var(--border); padding-top: 12px; }
 
   /* ---------- 骨架屏 ---------- */
   .sk-line { height: 30px; margin-top: 8px; border-radius: 7px;
-             background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+             background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 37%, var(--surface2) 63%);
              background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
   @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
   @media (prefers-reduced-motion: reduce) { .sk-line { animation: none; } }
 
-  /* ---------- 提示 ---------- */
-  #toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 12px);
-           background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong);
-           border-radius: 9px; padding: 8px 14px; font-size: 12.5px; opacity: 0; pointer-events: none;
-           transition: opacity .18s, transform .18s; box-shadow: 0 8px 26px rgba(0,0,0,.3); z-index: 50; }
+  /* ---------- 浮层 ---------- */
+  #hmTip { position: fixed; left: 0; top: 0; z-index: 60; min-width: 128px;
+           padding: 7px 10px; font-size: 12px; color: var(--text);
+           background: var(--surface2); border: 1px solid var(--border-strong);
+           border-radius: 8px; box-shadow: var(--shadow-pop);
+           opacity: 0; pointer-events: none; transition: opacity .1s; }
+  #hmTip.show { opacity: 1; }
+  #hmTip .t-date { margin-bottom: 4px; font-size: 11px; color: var(--muted); }
+  #hmTip .t-row { display: flex; justify-content: space-between; gap: 16px; }
+  #hmTip .t-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  #toast { position: fixed; left: 50%; bottom: 26px; z-index: 50;
+           padding: 8px 14px; font-size: 12.5px; color: var(--text);
+           background: var(--surface2); border: 1px solid var(--border-strong);
+           border-radius: 9px; box-shadow: var(--shadow-pop);
+           opacity: 0; pointer-events: none; transform: translate(-50%, 12px);
+           transition: opacity .18s, transform .18s; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   footer { margin-top: 18px; font-size: 12px; color: var(--faint); }
+
   @media (max-width: 620px) {
     .wrap { padding: 14px; }
     .card .v { font-size: 24px; }
@@ -162,18 +295,18 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top">
+  <header class="top">
     <div>
       <h1>Token Dashboard</h1>
       <div class="sub" id="sub">加载中…</div>
     </div>
     <div class="actions">
-      <button class="ghost" id="btnRefresh" title="立即重新拉取数据">↻ 刷新</button>
-      <button class="ghost" id="btnTheme" title="切换浅色 / 深色主题">◐ 主题</button>
+      <button id="btnRefresh" title="立即重新拉取数据">↻ 刷新</button>
+      <button id="btnTheme" title="切换浅色 / 深色主题">◐ 主题</button>
     </div>
-  </div>
+  </header>
 
-  <div class="bar">
+  <div class="bar" role="group" aria-label="筛选条件">
     <div class="seg" id="presets">
       <button data-preset="7">近 7 天</button>
       <button data-preset="30">近 30 天</button>
@@ -190,69 +323,143 @@
     </select></label>
   </div>
 
-  <div class="cards" id="cards">
-    <div class="card"><div class="k">今日 Tokens</div><div class="sk-line"></div></div>
+  <section class="hero" id="hero" aria-label="关键指标">
+    <div class="card"><div class="k">今日</div><div class="sk-line"></div></div>
     <div class="card"><div class="k">近 7 天</div><div class="sk-line"></div></div>
-    <div class="card"><div class="k">全部 Tokens</div><div class="sk-line"></div></div>
-    <div class="card"><div class="k">全部成本</div><div class="sk-line"></div></div>
-  </div>
+    <div class="card"><div class="k">近 30 天</div><div class="sk-line"></div></div>
+    <div class="card"><div class="k">缓存命中率</div><div class="sk-line"></div></div>
+    <div class="card"><div class="k">累计成本</div><div class="sk-line"></div></div>
+  </section>
+
   <div class="statusbar" id="status"><span class="chip">正在读取本地数据…</span></div>
 
+  <!-- 工作回溯：纯 DOM 网格，约 370 个 div，比 ECharts calendar 更轻、样式完全可控 -->
+  <section class="panel">
+    <h2>工作回溯 <span class="tag" id="hmRange">近 365 天</span></h2>
+    <div class="hm-wrap">
+      <div class="hm-main">
+        <div class="hm-scroll">
+          <div class="hm-cols">
+            <div class="hm-months-row">
+              <span class="hm-spacer"></span>
+              <div class="hm-months" id="hmMonths"></div>
+            </div>
+            <div class="hm-grid-row">
+              <div class="hm-daylabels"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
+              <div class="hm-grid" id="hmGrid"></div>
+            </div>
+          </div>
+        </div>
+        <div class="hm-legend">
+          <span>少</span>
+          <i class="hm-cell lv0"></i><i class="hm-cell lv1"></i><i class="hm-cell lv2"></i><i class="hm-cell lv3"></i><i class="hm-cell lv4"></i>
+          <span>多</span>
+        </div>
+      </div>
+      <aside class="hm-stats" id="hmStats"></aside>
+    </div>
+  </section>
+
   <div class="grid">
-    <div class="panel">
+    <section class="panel">
       <h2>每日用量趋势 <span class="tag" id="dimLabel">按 harness</span></h2>
       <div class="chartbox" id="boxDaily">
         <div class="chart" id="chartDaily"></div>
         <div class="empty"><div class="ico">◔</div><div>暂无数据</div><div>先运行 token-dashboard scan</div></div>
       </div>
-    </div>
-    <div class="panel">
+    </section>
+    <section class="panel">
       <h2>模型分布 <span class="tag">按 tokens</span></h2>
       <div class="chartbox" id="boxModels">
         <div class="chart" id="chartModels"></div>
         <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
       </div>
+    </section>
+  </div>
+
+  <div class="grid even">
+    <section class="panel">
+      <h2>活跃时段 <span class="tag">按 token</span></h2>
+      <div class="chartbox" id="boxHourly">
+        <div class="chart short" id="chartHourly"></div>
+        <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>项目分布 <span class="tag">Top 10</span></h2>
+      <div class="chartbox" id="boxProjects">
+        <div class="chart short" id="chartProjects"></div>
+        <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>
+      最近请求 <span class="tag">按时间倒序</span>
+      <span class="spacer"></span>
+      <span class="seg sm" id="reqSizes" role="group" aria-label="每页条数">
+        <button data-size="10">10</button>
+        <button data-size="20" class="on">20</button>
+        <button data-size="50">50</button>
+        <button data-size="100">100</button>
+      </span>
+    </h2>
+    <div class="tablewrap x">
+      <table id="reqTable">
+        <thead><tr>
+          <th class="l">时间</th><th class="l">Harness</th><th class="l">模型</th><th class="l">渠道</th>
+          <th>输入</th><th>缓存读</th><th>输出</th><th>推理</th><th>缓存率</th><th>合计</th><th>成本</th>
+        </tr></thead>
+        <tbody><tr><td class="empty-row" colspan="11">加载中…</td></tr></tbody>
+      </table>
     </div>
-  </div>
+    <div class="pager" id="reqPager"></div>
+  </section>
 
-  <div class="panel">
-    <h2>项目分布 <span class="tag">Top 10</span></h2>
-    <div class="chartbox" id="boxProjects">
-      <div class="chart short" id="chartProjects"></div>
-      <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
+  <details class="panel">
+    <summary>会话明细 <span class="tag">最近 30 个</span></summary>
+    <div class="body">
+      <div class="tablewrap">
+        <table id="sessions">
+          <thead><tr><th class="l">会话</th><th class="l">Harness</th><th class="l">项目</th><th class="l">开始</th><th class="l">结束</th><th>事件</th><th>Tokens</th><th>成本</th></tr></thead>
+          <tbody><tr><td class="empty-row" colspan="8">加载中…</td></tr></tbody>
+        </table>
+      </div>
     </div>
-  </div>
+  </details>
 
-  <div class="panel">
-    <h2>会话明细 <span class="tag">最近 30 个</span></h2>
-    <div class="tablewrap"><table id="sessions">
-      <thead><tr><th class="l">会话</th><th class="l">Harness</th><th class="l">项目</th><th class="l">开始</th><th class="l">结束</th><th>事件</th><th>Tokens</th><th>成本</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-  </div>
+  <details class="panel">
+    <summary>日明细 <span class="tag">按天</span></summary>
+    <div class="body">
+      <div class="tablewrap x">
+        <table id="daily">
+          <thead><tr><th class="l">日期</th><th>输入</th><th>缓存读</th><th>缓存写</th><th>输出</th><th>推理</th><th>合计</th><th>成本</th><th>未定价</th></tr></thead>
+          <tbody><tr><td class="empty-row" colspan="9">加载中…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </details>
 
-  <div class="panel">
-    <h2>日明细</h2>
-    <div class="tablewrap x"><table id="daily">
-      <thead><tr><th class="l">日期</th><th>输入</th><th>缓存读</th><th>缓存写</th><th>输出</th><th>推理</th><th>合计</th><th>成本</th><th>未定价</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-  </div>
-
-  <div class="panel" id="channelPanel" style="display:none">
+  <section class="panel" id="channelPanel" hidden>
     <h2>渠道视图 <span class="tag">来自 cc-switch · 独立口径，不与上面的 harness 总量合并</span></h2>
-    <div class="tablewrap"><table id="channels">
-      <thead><tr><th class="l">渠道</th><th>请求数</th><th>输入</th><th>缓存读</th><th>缓存写</th><th>输出</th><th>成本</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-  </div>
+    <div class="tablewrap">
+      <table id="channels">
+        <thead><tr><th class="l">渠道</th><th>请求数</th><th>输入</th><th>缓存读</th><th>缓存写</th><th>输出</th><th>成本</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 
   <footer>数据全部来自本机 · 仅监听 127.0.0.1 · 面板由 token-dashboard 提供</footer>
 </div>
+<div id="hmTip" role="tooltip"></div>
 <div id="toast"></div>
 
 <script>
-/* ================= 工具 ================= */
+/* ============================================================================
+   1. 工具
+   ========================================================================== */
 const esc = v => String(v === null || v === undefined ? "" : v)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -260,6 +467,7 @@ const esc = v => String(v === null || v === undefined ? "" : v)
 const isNum = n => n !== null && n !== undefined && n !== "";
 const fmt = n => isNum(n) ? Number(n).toLocaleString("en-US") : "-";
 const money = n => isNum(n) ? "$" + Number(n).toFixed(2) : "-";
+const pad2 = n => String(n).padStart(2, "0");
 
 /** 紧凑数字：与桌面小组件、图表坐标轴同一口径（1 位小数 + B/M/K）。 */
 function compact(n) {
@@ -276,10 +484,11 @@ const compactAxis = n => compact(n).replace(/\.0([BMK])$/, "$1");
 
 /** 本地日期（YYYY-MM-DD）。不能用 toISOString：那是 UTC，UTC+8 早上会少算一天。 */
 function localDate(d) {
-  const p = n => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
-function daysAgo(n) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - n); return localDate(d); }
+function todayNoon() { const d = new Date(); d.setHours(12, 0, 0, 0); return d; }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function daysAgo(n) { return localDate(addDays(todayNoon(), -n)); }
 
 /** 后端存的是 UTC ISO；没有时区信息时按 UTC 解释。 */
 function parseTs(iso) {
@@ -287,6 +496,15 @@ function parseTs(iso) {
   const s = String(iso);
   const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
   return isNaN(d.getTime()) ? null : d;
+}
+function fmtTime(iso) {
+  const d = parseTs(iso);
+  return d ? `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ` +
+             `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}` : "-";
+}
+function fullTime(iso) {
+  const d = parseTs(iso);
+  return d ? d.toLocaleString("zh-CN", { hour12: false }) : "-";
 }
 function relTime(iso) {
   const d = parseTs(iso);
@@ -298,19 +516,23 @@ function relTime(iso) {
   if (s < 86400 * 30) return Math.floor(s / 86400) + " 天前";
   return d.toLocaleDateString("zh-CN");
 }
-function fullTime(iso) {
-  const d = parseTs(iso);
-  return d ? d.toLocaleString("zh-CN", { hour12: false }) : "-";
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+function weekdayOf(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  return isNaN(d.getTime()) ? "" : WEEKDAYS[d.getDay()];
 }
-/** 项目路径只显示最后两段（原来的 slice(-40) 会从目录名中间切断）。 */
+/** 项目路径只显示最后两段（从中间切会切断目录名）。 */
 function shortPath(p) {
   if (!p) return "-";
   const parts = String(p).split(/[\\/]+/).filter(Boolean);
   return parts.length <= 2 ? parts.join("/") || "-" : "…/" + parts.slice(-2).join("/");
 }
 
-/* ================= 主题 ================= */
+/* ============================================================================
+   2. 主题
+   ========================================================================== */
 const mq = window.matchMedia("(prefers-color-scheme: light)");
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 function currentTheme() {
   const saved = localStorage.getItem("td-theme");
   if (saved === "light" || saved === "dark") return saved;
@@ -320,27 +542,32 @@ function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   document.getElementById("btnTheme").textContent = t === "light" ? "☀ 浅色" : "☾ 深色";
 }
-const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-/* ================= 稳定配色：同一 key 在任何图里颜色一致 ================= */
+/* ============================================================================
+   3. 稳定配色：同一个 key 在任何图里颜色一致
+   （趋势图、饼图、Harness 徽章共用；旧版同模型两图不同色就是各图各随机）
+   ========================================================================== */
 const PALETTE = ["#3b82f6", "#22c55e", "#eab308", "#f97316", "#a855f7", "#06b6d4",
                  "#ef4444", "#84cc16", "#ec4899", "#14b8a6", "#8b5cf6", "#0ea5e9"];
-const colorMap = new Map();
+const colorCache = new Map();
 function colorFor(key) {
   const k = String(key === null || key === undefined ? "-" : key);
-  if (colorMap.has(k)) return colorMap.get(k);
-  const used = new Set(colorMap.values());
+  if (colorCache.has(k)) return colorCache.get(k);
+  const used = new Set(colorCache.values());
   let h = 0;
   for (const ch of k) h = (h * 31 + ch.codePointAt(0)) >>> 0;
   let idx = h % PALETTE.length;
   for (let i = 0; i < PALETTE.length && used.has(PALETTE[idx]); i++) idx = (idx + 1) % PALETTE.length;
-  colorMap.set(k, PALETTE[idx]);
+  colorCache.set(k, PALETTE[idx]);
   return PALETTE[idx];
 }
 
-/* ================= 状态 ================= */
-const state = { harness: "", since: "", until: "", dim: "harness" };
+/* ============================================================================
+   4. 状态 / HTTP
+   ========================================================================== */
+const state = { harness: "", since: "", until: "", dim: "harness", reqPage: 1, reqSize: 20 };
 const PRESET_DAYS = { "7": 6, "30": 29 };
+const HAS_ECHARTS = typeof echarts !== "undefined";
 
 function qs(extra = {}) {
   const p = new URLSearchParams();
@@ -373,16 +600,20 @@ function copyText(text) {
   document.body.removeChild(ta);
 }
 
-/* ================= 图表 ================= */
-let cDaily, cModels, cProjects;
-let lastData = null;
+/* ============================================================================
+   5. 图表：统一主题 / 统一 tooltip
+   ========================================================================== */
+let cDaily = null, cModels = null, cProjects = null, cHourly = null;
+let lastData = null, lastUpdated = null;
 
 function chartTheme() {
   return {
     text: cssVar("--text"), muted: cssVar("--muted"), border: cssVar("--border"),
-    surface2: cssVar("--surface-2"), accent: cssVar("--accent"),
+    surface: cssVar("--surface"), surface2: cssVar("--surface2"),
+    accent: cssVar("--accent"), faint: cssVar("--faint"),
   };
 }
+/** 深色 tooltip 常量：三张图共用，避免每张图各配一套。 */
 function tipBase() {
   const t = chartTheme();
   return {
@@ -399,25 +630,28 @@ function axisCommon() {
     splitLine: { lineStyle: { color: t.border } },
   };
 }
-
 function initCharts() {
+  if (!HAS_ECHARTS) return;
   cDaily = echarts.init(document.getElementById("chartDaily"));
   cModels = echarts.init(document.getElementById("chartModels"));
   cProjects = echarts.init(document.getElementById("chartProjects"));
+  cHourly = echarts.init(document.getElementById("chartHourly"));
   window.addEventListener("resize", () => {
-    cDaily.resize(); cModels.resize(); cProjects.resize();
+    [cDaily, cModels, cProjects, cHourly].forEach(c => c && c.resize());
   });
 }
 function setEmpty(id, empty) {
-  document.getElementById(id).classList.toggle("is-empty", !!empty);
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle("is-empty", !!empty);
 }
-/** 无数据时不 setOption（空饼图/空坐标轴会留下奇怪的残影），直接清空并显示占位。 */
+/** 无数据时不 setOption（空饼图/空坐标轴会留下残影），直接清空并显示占位。 */
 function blank(chart, boxId) {
-  chart.clear();
+  if (chart) chart.clear();
   setEmpty(boxId, true);
 }
 
 function renderDailyChart(rows) {
+  if (!cDaily) return;
   const t = chartTheme();
   const dates = [...new Set(rows.map(r => r.date))].sort();
   if (!dates.length) return blank(cDaily, "boxDaily");
@@ -437,7 +671,7 @@ function renderDailyChart(rows) {
   if (other.length) {
     series.push({
       name: "其他", type: "bar", stack: "t", barMaxWidth: 22,
-      itemStyle: { color: "#4b5563", borderRadius: [3, 3, 0, 0] },
+      itemStyle: { color: t.faint, borderRadius: [3, 3, 0, 0] },
       data: dates.map(d => other.reduce((s, k) => s + (map[d + "|" + k] || 0), 0)),
     });
   }
@@ -458,18 +692,26 @@ function renderDailyChart(rows) {
 }
 
 function renderModelChart(rows) {
+  if (!cModels) return;
   const t = chartTheme();
   const data = rows.slice(0, 8).map(r => ({
     name: r.key, value: r.tokens, itemStyle: { color: colorFor(r.key) },
   }));
   if (!data.length) return blank(cModels, "boxModels");
+  // 面板只有 1fr 宽，长模型名放不进扇区外标签；图例竖排在右侧，完整名字和数值看 tooltip
   cModels.setOption({
     tooltip: Object.assign(tipBase(), { trigger: "item", valueFormatter: fmt }),
+    legend: {
+      type: "scroll", orient: "vertical", right: 2, top: "middle", icon: "circle",
+      itemWidth: 8, itemHeight: 8, itemGap: 6,
+      textStyle: { color: t.muted, fontSize: 10 },
+      pageIconSize: 8, pageTextStyle: { color: t.muted, fontSize: 9 },
+      formatter: n => n.length > 19 ? n.slice(0, 18) + "…" : n,
+    },
     series: [{
-      type: "pie", radius: ["45%", "72%"], center: ["50%", "52%"], data,
-      itemStyle: { borderColor: cssVar("--surface"), borderWidth: 2 },
-      label: { color: t.text, fontSize: 11, formatter: "{b}\n{d}%" },
-      labelLine: { lineStyle: { color: t.border } },
+      type: "pie", radius: ["36%", "54%"], center: ["31%", "50%"], data,
+      itemStyle: { borderColor: t.surface, borderWidth: 2 },
+      label: { show: false }, labelLine: { show: false },
       emphasis: { scale: true, scaleSize: 6,
                   itemStyle: { shadowBlur: 14, shadowColor: "rgba(0,0,0,.35)" } },
     }],
@@ -478,6 +720,7 @@ function renderModelChart(rows) {
 }
 
 function renderProjectChart(rows) {
+  if (!cProjects) return;
   const t = chartTheme();
   const data = rows.slice(0, 10).reverse();
   if (!data.length) return blank(cProjects, "boxProjects");
@@ -490,11 +733,12 @@ function renderProjectChart(rows) {
   cProjects.setOption({
     tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmt,
       axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.12)" } } }),
-    grid: { left: 220, right: 40, top: 10, bottom: 22 },
+    grid: { left: 140, right: 34, top: 8, bottom: 20 },
     xAxis: Object.assign({ type: "value" }, ax,
       { axisLabel: { color: t.muted, fontSize: 10, formatter: compactAxis } }),
     yAxis: Object.assign({ type: "category", data: data.map(r => r.key) }, ax,
-      { axisLabel: { color: t.muted, fontSize: 10, width: 200, overflow: "truncate" },
+      { axisLabel: { color: t.muted, fontSize: 10, width: 128, overflow: "truncate",
+                     formatter: v => shortPath(v) },
         splitLine: { show: false } }),
     series: [{
       type: "bar", data: data.map(r => r.tokens),
@@ -504,57 +748,299 @@ function renderProjectChart(rows) {
   setEmpty("boxProjects", false);
 }
 
-/* ================= 卡片 / 状态条 ================= */
-function mainCards(s) {
-  const all = s.all || {}, today = s.today || {}, d7 = s.last7d || {}, range = s.range || {};
-  // 没有任何事件时展示 0 而不是 “-”；有事件但没算出售价时保留 “-”（表示缺价格）
-  const tk = o => (o.events ? o.tokens : 0);
+/** 活跃时段：回答「你几点在写代码」，与热力图是一对。 */
+function renderHourlyChart(rows) {
+  if (!cHourly) return;
+  const t = chartTheme();
+  if (!rows || !rows.length || !rows.some(r => r.events > 0)) return blank(cHourly, "boxHourly");
+  const grad = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color: t.accent },
+    { offset: 1, color: t.accent + "22" },
+  ]);
+  const ax = axisCommon();
+  cHourly.setOption({
+    tooltip: Object.assign(tipBase(), {
+      trigger: "axis",
+      axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.12)" } },
+      formatter: ps => {
+        const i = ps[0].dataIndex, r = rows[i] || {};
+        return `<b>${i} 点</b><br/>Token ${fmt(r.tokens || 0)}<br/>请求 ${fmt(r.events || 0)}`;
+      },
+    }),
+    grid: { left: 56, right: 12, top: 14, bottom: 26 },
+    xAxis: Object.assign({ type: "category", data: rows.map(r => String(r.hour)) }, ax, {
+      axisLabel: { color: t.muted, fontSize: 10, interval: 1, formatter: v => v + " 点" },
+      axisTick: { show: false },
+    }),
+    yAxis: Object.assign({ type: "value" }, ax,
+      { axisLabel: { color: t.muted, fontSize: 10, formatter: compactAxis } }),
+    series: [{
+      type: "bar", data: rows.map(r => r.tokens || 0), barMaxWidth: 16,
+      itemStyle: { color: grad, borderRadius: [3, 3, 0, 0] },
+      emphasis: { itemStyle: { color: t.accent } },
+    }],
+  }, true);
+  setEmpty("boxHourly", false);
+}
+
+function rerenderCharts() {
+  if (!lastData) return;
+  renderDailyChart(lastData.daily);
+  renderModelChart(lastData.models);
+  renderProjectChart(lastData.projects);
+  renderHourlyChart(lastData.hourly);
+}
+
+/* ============================================================================
+   6. Hero：今日 / 近 7 天 / 近 30 天 / 缓存命中率 / 累计成本
+   ========================================================================== */
+function sumRange(rows, from, to) {
+  let s = 0;
+  for (const r of rows) if (r.date >= from && r.date <= to) s += r.tokens || 0;
+  return s;
+}
+function deltaPct(cur, prev) {
+  if (!prev) return null; // 昨天为 0：不显示百分比，避免 Infinity / NaN
+  return (cur - prev) / prev * 100;
+}
+function deltaHtml(p, label) {
+  const tail = `<span class="muted">${esc(label)}</span>`;
+  if (p === null || !isFinite(p) || Math.abs(p) < 0.05) {
+    return `<div class="d flat">— ${tail}</div>`;
+  }
+  const up = p > 0;
+  return `<div class="d ${up ? "up" : "down"}">${up ? "▲" : "▼"} ${Math.abs(p).toFixed(1)}% ${tail}</div>`;
+}
+
+function heroCards(s, yearRows) {
+  const all = s.all || {}, today = s.today || {}, d7 = s.last7d || {}, d30 = s.last30d || {};
+  // 没有任何事件时展示 0 而不是 "-"；有事件但没算出售价时保留 "-"（表示缺价格）
+  const tk = o => (o && o.events) ? (o.tokens || 0) : 0;
+  const end = todayNoon();
+  const tStr = localDate(end), yStr = localDate(addDays(end, -1));
+  const w1 = sumRange(yearRows, localDate(addDays(end, -6)), tStr);
+  const w0 = sumRange(yearRows, localDate(addDays(end, -13)), localDate(addDays(end, -7)));
+  const tTok = sumRange(yearRows, tStr, tStr);
+  const yTok = sumRange(yearRows, yStr, yStr);
+
+  const inp = all.input || 0, cr = all.cache_read || 0;
+  const hit = (inp + cr) > 0 ? cr / (inp + cr) * 100 : null;
+  const unpriced = all.unpriced || 0;
+
   const cards = [
-    { k: "今日 Tokens", v: compact(tk(today)), n: "精确 " + fmt(tk(today)), primary: true },
-    { k: "近 7 天", v: compact(tk(d7)), n: "精确 " + fmt(tk(d7)) },
-    { k: "全部 Tokens", v: compact(tk(all)), n: "精确 " + fmt(tk(all)) },
-    { k: "全部成本", v: all.events ? money(all.cost) : money(0),
-      n: (all.events || 0).toLocaleString("en-US") + " 条事件" },
+    { k: "今日", v: compact(tk(today)),
+      d: deltaHtml(deltaPct(tTok, yTok), "vs 昨日"),
+      n: "精确 " + fmt(tk(today)), cls: "accent" },
+    { k: "近 7 天", v: compact(tk(d7)),
+      d: deltaHtml(deltaPct(w1, w0), "vs 前 7 天"),
+      n: "精确 " + fmt(tk(d7)) },
+    { k: "近 30 天", v: compact(tk(d30)), n: "精确 " + fmt(tk(d30)) },
+    { k: "缓存命中率", v: hit === null ? "-" : hit.toFixed(1) + "%",
+      n: `缓存读 ${compact(cr)} · 输入 ${compact(inp)}`, cls: "good",
+      title: "cache_read / (input + cache_read)：越高说明上下文复用越好" },
+    { k: "累计成本", v: all.events ? money(all.cost) : money(0),
+      n: `${compact(all.tokens || 0)} tokens · ${fmt(unpriced)} 条未定价`,
+      ncls: unpriced > 0 ? "warnc" : "", cls: unpriced > 0 ? "warn" : "" },
   ];
+
+  document.getElementById("hero").innerHTML = cards.map(c => `
+    <div class="card ${c.cls || ""}"${c.title ? ` title="${esc(c.title)}"` : ""}>
+      <div class="k">${esc(c.k)}</div>
+      <div class="v">${esc(c.v)}</div>
+      ${c.d || ""}
+      ${c.n ? `<div class="n ${c.ncls || ""}">${esc(c.n)}</div>` : ""}
+    </div>`).join("");
+}
+
+/* ============================================================================
+   7. 工作回溯热力图
+   - 从今天往前 365 天，再对齐到周一；格子总数 = 完整周数 × 7
+   - 颜色用四分位而不是线性：token 用量是长尾分布，线性会让峰值之外全是浅色
+   ========================================================================== */
+let hmByDate = {};
+
+function renderHeatmap(rows) {
+  const grid = document.getElementById("hmGrid");
+  const monthsEl = document.getElementById("hmMonths");
+  const byDate = {};
+  rows.forEach(r => { byDate[r.date] = r; });
+  hmByDate = byDate;
+
+  const end = todayNoon();
+  const start = addDays(end, -364);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // 周日 getDay()=0，先 +6 再取模
+  const days = Math.round((end - start) / 864e5) + 1;
+  const cols = Math.ceil(days / 7);
+
+  const vals = rows.map(r => r.tokens || 0).filter(v => v > 0).sort((a, b) => a - b);
+  const q = p => vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : 0;
+  const q1 = q(0.25), q2 = q(0.5), q3 = q(0.75);
+  const level = v => v <= 0 ? 0 : v <= q1 ? 1 : v <= q2 ? 2 : v <= q3 ? 3 : 4;
+
+  let html = "";
+  for (let i = 0; i < cols * 7; i++) {
+    const d = addDays(start, i);
+    const ds = localDate(d);
+    const col = Math.floor(i / 7) + 1;
+    const row = i % 7 + 1;
+    if (d > end) {
+      html += `<div class="hm-cell void" style="grid-column:${col};grid-row:${row}"></div>`;
+      continue;
+    }
+    const lv = level((byDate[ds] || {}).tokens || 0);
+    html += `<div class="hm-cell${lv ? " lv" + lv : ""}" style="grid-column:${col};grid-row:${row}" data-d="${ds}"></div>`;
+  }
+  grid.style.gridTemplateColumns = `repeat(${cols}, 11px)`;
+  grid.innerHTML = html;
+
+  // 月份标签：遍历每周第一天，月份与上一列不同才放
+  let mhtml = "", prevMonth = -1;
+  for (let c = 0; c < cols; c++) {
+    const first = addDays(start, c * 7);
+    if (first > end) break;
+    if (first.getMonth() !== prevMonth) {
+      mhtml += `<span class="hm-month" style="grid-column:${c + 1} / span 3">${first.getMonth() + 1}月</span>`;
+      prevMonth = first.getMonth();
+    }
+  }
+  monthsEl.style.gridTemplateColumns = `repeat(${cols}, 11px)`;
+  monthsEl.innerHTML = mhtml;
+
+  const rangeTag = document.getElementById("hmRange");
+  rangeTag.textContent = "近 365 天";
+  rangeTag.title = `${localDate(start)} ~ ${localDate(end)}`;
+  renderHmStats(rows, start, end);
+}
+
+function renderHmStats(rows, start, end) {
+  const from = localDate(start), to = localDate(end);
+  const win = rows.filter(r => r.date >= from && r.date <= to);
+  const events = win.reduce((a, r) => a + (r.events || 0), 0);
+  const tokens = win.reduce((a, r) => a + (r.tokens || 0), 0);
+  const active = win.filter(r => (r.tokens || 0) > 0).length;
+  let peak = null;
+  for (const r of win) if (!peak || (r.tokens || 0) > (peak.tokens || 0)) peak = r;
+  const has = events > 0;
+  document.getElementById("hmStats").innerHTML = `
+    <div class="hm-stat"><div class="k">总请求</div><div class="v">${has ? esc(fmt(events)) : "-"}</div></div>
+    <div class="hm-stat"><div class="k">总 Token</div><div class="v">${has ? esc(compact(tokens)) : "-"}</div></div>
+    <div class="hm-stat"><div class="k">峰值单日</div>
+      <div class="v">${has && peak ? esc(peak.date.slice(5)) : "-"}</div>
+      <div class="n">${has && peak ? esc(compact(peak.tokens)) + " tokens" : "—"}</div></div>
+    <div class="hm-stat"><div class="k">有活动</div><div class="v">${has ? active + " 天" : "-"}</div></div>`;
+}
+
+/* 热力图悬浮提示：一个全局 div，跟手定位 */
+function showHmTip(cell, ev) {
+  const ds = cell.dataset.d;
+  if (!ds) return;
+  const r = hmByDate[ds] || {};
+  const el = document.getElementById("hmTip");
+  el.innerHTML = `<div class="t-date">${esc(ds)} ${esc(weekdayOf(ds))}</div>
+    <div class="t-row"><span>请求</span><b>${esc(fmt(r.events || 0))}</b></div>
+    <div class="t-row"><span>Token</span><b>${esc(fmt(r.tokens || 0))}</b></div>`;
+  el.classList.add("show");
+  moveHmTip(ev);
+}
+function moveHmTip(ev) {
+  const el = document.getElementById("hmTip");
+  const pad = 10;
+  let x = ev.clientX + 14, y = ev.clientY + 16;
+  if (x + el.offsetWidth + pad > window.innerWidth) x = ev.clientX - el.offsetWidth - 14;
+  if (y + el.offsetHeight + pad > window.innerHeight) y = ev.clientY - el.offsetHeight - 16;
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+}
+function hideHmTip() { document.getElementById("hmTip").classList.remove("show"); }
+
+/* ============================================================================
+   8. 状态条
+   ========================================================================== */
+function statusBar(s, meta) {
+  const all = s.all || {};
+  const unpriced = all.unpriced || 0;
+  const chips = [
+    `<span class="chip">事件 <b>${esc(fmt(all.events || 0))}</b></span>`,
+    unpriced > 0
+      ? `<span class="chip warn" title="这些事件的模型不在价格表里，成本未计入">未定价 <b>${esc(fmt(unpriced))}</b> 条 ⚠</span>`
+      : `<span class="chip ok">全部已定价 ✓</span>`,
+  ];
+  if (meta.channel_rows) {
+    chips.push(`<span class="chip">渠道数据 <b>${esc(fmt(meta.channel_rows))}</b> 行</span>`);
+  }
   if (state.harness || state.since || state.until) {
     const bits = [];
     if (state.harness) bits.push(state.harness);
     if (state.since) bits.push(state.since + " 起");
     if (state.until) bits.push("至 " + state.until);
-    cards.push({ k: "当前筛选", v: compact(tk(range)), n: bits.join(" · ") || "全部", filtered: true });
+    chips.push(`<span class="chip accent">筛选 <b>${esc(compact((s.range || {}).tokens || 0))}</b> · ${esc(bits.join(" · "))}</span>`);
   }
-  document.getElementById("cards").innerHTML = cards.map(c =>
-    `<div class="card${c.primary ? " primary" : ""}">
-       <div class="k">${esc(c.k)}</div>
-       <div class="v">${esc(c.v)}</div>
-       <div class="n">${esc(c.n)}</div>
-     </div>`).join("");
-}
-
-function statusBar(s, meta) {
-  const all = s.all || {}, unpriced = all.unpriced || 0;
-  const d30 = (s.last30d || {}).tokens;
-  const chips = [
-    `<span class="chip">近 30 天 <b>${esc(compact(d30))}</b></span>`,
-    `<span class="chip">事件 <b>${esc(fmt(all.events))}</b></span>`,
-    unpriced > 0
-      ? `<span class="chip warn" title="这些事件的模型不在价格表里，成本未计入">未定价事件 <b>${esc(fmt(unpriced))}</b> ⚠</span>`
-      : `<span class="chip ok">未定价事件 <b>0</b> ✓</span>`,
-    `<span class="chip">时区 <b>${esc(s.timezone || "-")}</b></span>`,
-    `<span class="chip">数据范围 <b>${esc(meta.min_date || "-")} ~ ${esc(meta.max_date || "-")}</b></span>`,
-    `<span class="chip">渠道数据 <b>${esc(fmt(meta.channel_rows || 0))}</b> 行</span>`,
-  ];
   document.getElementById("status").innerHTML = chips.join("");
 }
 
-/* ================= 表格 ================= */
+/* ============================================================================
+   9. 表格
+   ========================================================================== */
+function requestRows(rows) {
+  if (!rows.length) {
+    return `<tr><td class="empty-row" colspan="11">暂无数据</td></tr>`;
+  }
+  return rows.map(r => {
+    const inp = r.input_tokens || 0, cr = r.cache_read_tokens || 0, cw = r.cache_write_tokens || 0;
+    const out = r.output_tokens || 0, rs = r.reasoning_tokens || 0;
+    const total = inp + cr + cw + out + rs;
+    const denom = inp + cr;
+    const rate = denom > 0 ? cr / denom * 100 : null;
+    const rateCell = rate === null
+      ? `<span class="faint">-</span>`
+      : `<span class="${rate >= 80 ? "good" : ""}">${rate.toFixed(1)}%</span>`;
+    const h = r.harness || "-";
+    const cost = r.cost_usd === null || r.cost_usd === undefined
+      ? `<span class="faint" title="该模型不在价格表中">-</span>`
+      : esc(money(r.cost_usd));
+    return `<tr>
+      <td class="l mono dim" title="${esc(r.ts || "")}">${esc(fmtTime(r.ts))}</td>
+      <td class="l"><span class="hbadge"><i style="background:${colorFor(h)}"></i>${esc(h)}</span></td>
+      <td class="l" title="${esc(r.raw_model || r.model || "")}">${esc(r.model || "-")}</td>
+      <td class="l dim">${esc(r.channel || "-")}</td>
+      <td>${esc(fmt(inp))}</td>
+      <td>${esc(fmt(cr))}</td>
+      <td>${esc(fmt(out))}</td>
+      <td>${esc(fmt(rs))}</td>
+      <td>${rateCell}</td>
+      <td title="输入 + 缓存读 + 缓存写 + 输出 + 推理"><b>${esc(fmt(total))}</b></td>
+      <td>${cost}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderRequests(data, keepScroll) {
+  const rows = data.rows || [];
+  const wrap = document.querySelector("#reqTable").parentElement;
+  const top = keepScroll ? wrap.scrollTop : 0; // 自动刷新时别把用户滚到一半的表格顶回去
+  document.querySelector("#reqTable tbody").innerHTML = requestRows(rows);
+  wrap.scrollTop = top;
+  const total = data.total || 0, page = data.page || 1, size = data.size || state.reqSize;
+  const pages = Math.max(1, Math.ceil(total / size));
+  document.getElementById("reqPager").innerHTML = `
+    <div class="pg-info">第 <b>${page}</b> 页 / 共 <b>${fmt(total)}</b> 条</div>
+    <div class="pg-btns">
+      <button id="pgPrev" ${page <= 1 ? "disabled" : ""}>‹ 上一页</button>
+      <button id="pgNext" ${page >= pages ? "disabled" : ""}>下一页 ›</button>
+    </div>`;
+  document.querySelectorAll("#reqSizes button").forEach(b => {
+    b.classList.toggle("on", Number(b.dataset.size) === size);
+  });
+}
+
 function sessionRows(rows) {
   if (!rows.length) {
-    return `<tr><td class="l muted" colspan="8">暂无会话数据 —— 先运行 token-dashboard scan</td></tr>`;
+    return `<tr><td class="empty-row" colspan="8">暂无会话数据 —— 先运行 token-dashboard scan</td></tr>`;
   }
   return rows.map(r => {
     const sid = r.session_id || "-";
-    const pseudo = r.pseudo ? `<span class="badge" title="该来源的日志没有 session_id，按「来源 + 文件」聚合">无会话</span>` : "";
+    const pseudo = r.pseudo
+      ? `<span class="badge" title="该来源的日志没有 session_id，按「来源 + 文件」聚合">无会话</span>` : "";
     return `<tr>
       <td class="l"><span class="copy mono" data-copy="${esc(sid)}" title="点击复制：${esc(sid)}">${esc(sid.slice(0, 12))}</span>${pseudo}</td>
       <td class="l">${esc(r.harness || "-")}</td>
@@ -570,7 +1056,7 @@ function sessionRows(rows) {
 
 function dailyRows(rows) {
   if (!rows.length) {
-    return `<tr><td class="l muted" colspan="9">暂无数据 —— 先运行 token-dashboard scan</td></tr>`;
+    return `<tr><td class="empty-row" colspan="9">暂无数据 —— 先运行 token-dashboard scan</td></tr>`;
   }
   return rows.map(r => `<tr>
       <td class="l">${esc(r.date)}</td>
@@ -597,121 +1083,197 @@ function channelRows(rows) {
     </tr>`).join("");
 }
 
-/* ================= 主流程 ================= */
-let lastUpdated = null;
+/* ============================================================================
+   10. 主流程
+   ========================================================================== */
+function renderSub(s, meta) {
+  const t = lastUpdated
+    ? `${pad2(lastUpdated.getHours())}:${pad2(lastUpdated.getMinutes())}` : "-";
+  document.getElementById("sub").textContent =
+    `时区 ${s.timezone || "-"} · 数据范围 ${meta.min_date || "-"} ~ ${meta.max_date || "-"} · 更新于 ${t}`;
+}
 
-function setFreshness() {
-  const el = document.getElementById("sub");
-  if (!el._meta) return;
-  const secs = lastUpdated ? Math.round((Date.now() - lastUpdated) / 1000) : null;
-  const ago = secs === null ? "" : (secs < 5 ? " · 刚刚更新" : ` · ${secs} 秒前更新`);
-  el.textContent = el._meta + ago;
+/** 只刷新最近请求（翻页 / 改页大小时用，不重拉整页数据）。 */
+async function loadRequests() {
+  try {
+    const data = await jget("/api/requests?" + qs({ page: state.reqPage, size: state.reqSize }));
+    // 越界兜底：总数变少时自动回退到最后一页，避免停在空白页
+    if (!data.rows.length && data.total > 0 && state.reqPage > 1) {
+      state.reqPage = Math.max(1, Math.ceil(data.total / state.reqSize));
+      return loadRequests();
+    }
+    renderRequests(data);
+  } catch (e) {
+    toast("请求列表加载失败：" + e.message);
+  }
 }
 
 async function refresh(manual) {
   const btn = document.getElementById("btnRefresh");
   if (manual) btn.disabled = true;
   try {
-    const [s, meta, daily, models, projects, sessions, dAll, ch] = await Promise.all([
-      jget("/api/summary?" + qs()),
-      jget("/api/meta"),
-      jget("/api/daily?" + qs({ dim: state.dim })),
-      jget("/api/breakdown?" + qs({ dim: "model", limit: 10 })),
-      jget("/api/breakdown?" + qs({ dim: "project", limit: 10 })),
-      jget("/api/sessions?" + qs({ limit: 30 })),
-      jget("/api/daily?" + qs({ dim: "total" })),
-      jget("/api/channels?" + qs()),
-    ]);
-    lastData = { s, meta, daily, models, projects, sessions, dAll, ch };
+    const yearSince = daysAgo(370);
+    // 11 个请求并行：本地 SQLite 都是毫秒级，串行反而更慢
+    const [s, meta, daily, models, projects, sessions, dAll, yearRows, hourly, req, ch] =
+      await Promise.all([
+        jget("/api/summary?" + qs()),
+        jget("/api/meta"),
+        jget("/api/daily?" + qs({ dim: state.dim })),
+        jget("/api/breakdown?" + qs({ dim: "model", limit: 10 })),
+        jget("/api/breakdown?" + qs({ dim: "project", limit: 10 })),
+        jget("/api/sessions?" + qs({ limit: 30 })),
+        jget("/api/daily?" + qs({ dim: "total" })),
+        // 热力图固定看近一年，只跟 harness 走（日期筛选不影响回溯窗口）
+        jget("/api/daily?" + qs({ dim: "total", since: yearSince, until: "" })),
+        jget("/api/hourly?" + qs()),
+        jget("/api/requests?" + qs({ page: state.reqPage, size: state.reqSize })),
+        jget("/api/channels?" + qs()),
+      ]);
 
-    mainCards(s);
+    lastData = { s, meta, daily, models, projects, sessions, dAll, yearRows, hourly, ch };
+
+    heroCards(s, yearRows);
     statusBar(s, meta);
+    renderHeatmap(yearRows);
     renderDailyChart(daily);
     renderModelChart(models);
     renderProjectChart(projects);
+    renderHourlyChart(hourly);
 
     document.querySelector("#sessions tbody").innerHTML = sessionRows(sessions);
     document.querySelector("#daily tbody").innerHTML = dailyRows(dAll);
-    document.getElementById("channelPanel").style.display =
-      (ch.summary && ch.summary.length) ? "" : "none";
-    if (ch.summary && ch.summary.length) {
+    const chPanel = document.getElementById("channelPanel");
+    chPanel.hidden = !(ch.summary && ch.summary.length);
+    if (!chPanel.hidden) {
       document.querySelector("#channels tbody").innerHTML = channelRows(ch.summary);
     }
 
-    const hs = document.getElementById("fHarness");
-    if (hs.options.length <= 1 && meta.harnesses) {
-      meta.harnesses.forEach(h => {
-        const o = document.createElement("option");
-        o.value = h; o.textContent = h; hs.appendChild(o);
-      });
-      if (meta.min_date) {
-        document.getElementById("fSince").min = meta.min_date;
-        document.getElementById("fUntil").min = meta.min_date;
-      }
-      if (meta.max_date) {
-        document.getElementById("fSince").max = meta.max_date;
-        document.getElementById("fUntil").max = meta.max_date;
-      }
+    if (!req.rows.length && req.total > 0 && state.reqPage > 1) {
+      state.reqPage = Math.max(1, Math.ceil(req.total / state.reqSize));
+      await loadRequests();
+    } else {
+      renderRequests(req, true);
     }
-    document.getElementById("sub")._meta =
-      `时区 ${s.timezone} · 数据范围 ${meta.min_date || "-"} ~ ${meta.max_date || "-"}`;
-    lastUpdated = Date.now();
-    setFreshness();
+
+    // harness 下拉：列表变了才重建，同时保留当前选择
+    const hs = document.getElementById("fHarness");
+    const want = meta.harnesses || [];
+    const cur = [...hs.options].slice(1).map(o => o.value);
+    if (want.join("|") !== cur.join("|")) {
+      hs.innerHTML = '<option value="">全部</option>';
+      want.forEach(h => {
+        const o = document.createElement("option");
+        o.value = h; o.textContent = h;
+        hs.appendChild(o);
+      });
+      hs.value = state.harness;
+    }
+    if (meta.min_date) {
+      for (const id of ["fSince", "fUntil"]) document.getElementById(id).min = meta.min_date;
+    }
+    const todayStr = localDate(todayNoon());
+    for (const id of ["fSince", "fUntil"]) document.getElementById(id).max = todayStr;
+
+    lastUpdated = new Date();
+    renderSub(s, meta);
     if (manual) toast("已刷新");
   } catch (e) {
     document.getElementById("sub").textContent = "加载失败：" + e.message;
-    document.getElementById("cards").innerHTML =
-      `<div class="card"><div class="k">加载失败</div><div class="v">—</div>
-       <div class="n">${esc(e.message)}</div></div>`;
-    document.getElementById("status").innerHTML = "";
+    document.getElementById("status").innerHTML =
+      `<span class="chip warn">加载失败 · ${esc(e.message)}</span>`;
   } finally {
     if (manual) btn.disabled = false;
   }
 }
 
-/* ---------- 筛选交互 ---------- */
+/* ============================================================================
+   11. 筛选交互
+   ========================================================================== */
 function syncPresets() {
   const btns = document.querySelectorAll("#presets button");
   let matched = null;
   if (!state.since && !state.until) matched = "all";
   else if (!state.until) {
-    for (const p in PRESET_DAYS) if (state.since === daysAgo(PRESET_DAYS[p])) { matched = p; break; }
+    for (const p in PRESET_DAYS) {
+      if (state.since === daysAgo(PRESET_DAYS[p])) { matched = p; break; }
+    }
   }
   btns.forEach(b => b.classList.toggle("on", b.dataset.preset === matched));
 }
 
+/** 改筛选必须回到第 1 页——否则改了 harness 还停在第 5 页会显示空表。 */
+function onFilterChange() {
+  state.reqPage = 1;
+  refresh();
+}
+
 function bind() {
-  document.getElementById("fHarness").onchange = e => { state.harness = e.target.value; refresh(); };
+  document.getElementById("fHarness").onchange = e => {
+    state.harness = e.target.value;
+    onFilterChange();
+  };
   document.getElementById("fSince").onchange = e => {
-    state.since = e.target.value; syncPresets(); refresh();
+    state.since = e.target.value;
+    syncPresets();
+    onFilterChange();
   };
   document.getElementById("fUntil").onchange = e => {
-    state.until = e.target.value; syncPresets(); refresh();
+    state.until = e.target.value;
+    syncPresets();
+    onFilterChange();
   };
   document.getElementById("fDim").onchange = e => {
     state.dim = e.target.value;
     document.getElementById("dimLabel").textContent = state.dim === "model" ? "按模型" : "按 harness";
     refresh();
   };
-  document.querySelectorAll("#presets button").forEach(b => b.onclick = () => {
-    const p = b.dataset.preset;
-    if (p === "all") { state.since = ""; state.until = ""; }
-    else { state.since = daysAgo(PRESET_DAYS[p]); state.until = ""; }
-    document.getElementById("fSince").value = state.since;
-    document.getElementById("fUntil").value = state.until;
-    syncPresets();
-    refresh();
+  document.querySelectorAll("#presets button").forEach(b => {
+    b.onclick = () => {
+      const p = b.dataset.preset;
+      if (p === "all") { state.since = ""; state.until = ""; }
+      else { state.since = daysAgo(PRESET_DAYS[p]); state.until = ""; }
+      document.getElementById("fSince").value = state.since;
+      document.getElementById("fUntil").value = state.until;
+      syncPresets();
+      onFilterChange();
+    };
   });
+
+  // 分页：容器常驻，按钮每次重绘，所以用事件委托
+  document.getElementById("reqPager").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    if (b.id === "pgPrev" && state.reqPage > 1) { state.reqPage--; loadRequests(); }
+    if (b.id === "pgNext") { state.reqPage++; loadRequests(); }
+  });
+  document.getElementById("reqSizes").addEventListener("click", e => {
+    const b = e.target.closest("button[data-size]");
+    if (!b) return;
+    const size = Number(b.dataset.size);
+    if (size === state.reqSize) return;
+    state.reqSize = size;
+    state.reqPage = 1;
+    document.querySelectorAll("#reqSizes button").forEach(x => x.classList.toggle("on", x === b));
+    loadRequests();
+  });
+
+  // 热力图 tooltip
+  const hm = document.getElementById("hmGrid");
+  hm.addEventListener("pointerover", e => {
+    const c = e.target.closest(".hm-cell");
+    if (c && c.dataset.d) showHmTip(c, e);
+  });
+  hm.addEventListener("pointermove", e => {
+    if (document.getElementById("hmTip").classList.contains("show")) moveHmTip(e);
+  });
+  hm.addEventListener("pointerleave", hideHmTip);
+
   document.getElementById("btnRefresh").onclick = () => refresh(true);
   document.getElementById("btnTheme").onclick = () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
     localStorage.setItem("td-theme", next);
     applyTheme(next);
-    if (lastData) {
-      renderDailyChart(lastData.daily);
-      renderModelChart(lastData.models);
-      renderProjectChart(lastData.projects);
-    }
+    rerenderCharts();
   };
   // 会话 id 点击复制
   document.getElementById("sessions").addEventListener("click", e => {
@@ -720,18 +1282,24 @@ function bind() {
   });
 }
 
-/* ---------- 启动 ---------- */
+/* ============================================================================
+   12. 启动
+   ========================================================================== */
 applyTheme(currentTheme());
-if (mq.addEventListener) mq.addEventListener("change", () => {
-  if (!localStorage.getItem("td-theme")) applyTheme(currentTheme());
-});
+if (mq.addEventListener) {
+  mq.addEventListener("change", () => {
+    if (!localStorage.getItem("td-theme")) applyTheme(currentTheme());
+  });
+}
 initCharts();
 bind();
 syncPresets();
 refresh();
+// 自动刷新：SQLite 查询毫秒级，60s 一次负载可忽略
 setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60000);
-setInterval(setFreshness, 1000);
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refresh();
+});
 </script>
 </body>
 </html>

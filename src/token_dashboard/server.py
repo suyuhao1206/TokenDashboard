@@ -86,6 +86,32 @@ def create_app(cfg: dict) -> FastAPI:
             "daily": [dict(r) for r in store.channel_daily(since=since, until=until)],
         }
 
+    @app.get("/api/requests")
+    def requests(
+        page: int = 1,
+        size: int = 20,
+        harness: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+    ):
+        return store.recent_requests(page=page, size=size, since=since, until=until, harness=harness)
+
+    @app.get("/api/hourly")
+    def hourly(
+        harness: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+    ):
+        # ts 存的是 UTC ISO 文本，SQL 里按 UTC 小时聚合后再平移到面板时区。
+        # 对整小时偏移的时区（如 Asia/Shanghai +8）精确；半/刻钟偏移的时区会取整。
+        offset_h = round((datetime.now(tz).utcoffset() or timedelta()).total_seconds() / 3600)
+        buckets = [{"hour": h, "events": 0, "tokens": 0} for h in range(24)]
+        for r in store.hourly(since=since, until=until, harness=harness):
+            local_h = (r["utc_hour"] + offset_h) % 24
+            buckets[local_h]["events"] += r["events"]
+            buckets[local_h]["tokens"] += r["tokens"] or 0
+        return buckets
+
     @app.get("/")
     def index():
         return FileResponse(UI_DIR / "index.html")

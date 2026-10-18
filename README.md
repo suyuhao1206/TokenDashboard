@@ -79,7 +79,9 @@ powershell -File build_exe.ps1   # Windows 自带 PowerShell 即可；装了 Pow
 - **存储**：SQLite（`data/usage.db`）；重复扫描不重复计数（文件 mtime/size 跳过 + `dedup_key` 唯一 + 时间戳守卫）；
   去重键与文件**物理路径解耦**（Codex 归档、项目目录改名都不会重复入库，见 `docs/architecture.md` §5.1）；
   写入侧开 WAL + `busy_timeout`，面板与小组件可并发读写
-- **面板**：`http://127.0.0.1:8787` —— 概览卡、每日趋势（按 harness / 模型堆叠）、模型分布、项目 Top10、会话明细、日明细；带时间范围与 harness 筛选
+- **面板**：`http://127.0.0.1:8787` —— 5 张 KPI 卡（今日 / 近 7 天 / 近 30 天 / 缓存命中率 / 累计成本，含环比）、
+  工作回溯热力图（近 365 天，四分位分级）、每日趋势（按 harness / 模型堆叠）、活跃时段、模型分布、项目 Top10、
+  最近请求分页表（页大小 10/20/50/100）、会话明细、日明细；带时间范围与 harness 筛选，60 秒自动刷新
 - **渠道视图（M3 起步）**：只读接入 cc-switch，把渠道汇总写入独立表并以独立面板区块呈现（**不与 harness 总量合并**，避免重复计数）。注意 cc-switch 自身的历史归因较粗，大部分只能标为「会话日志·codex/claude」
 - **成本**：`update-pricing` 后已为 6,997 / 8,427 条事件算出成本（合计约 **$924**，其中 Codex $599 / Claude Code $325）
 - **对齐 ccusage**：Claude Code 3/3 基准日**完全一致**；Codex 57 天中 54 天完全一致
