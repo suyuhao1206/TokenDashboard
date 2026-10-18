@@ -1,4 +1,4 @@
-# 打包两个 exe：TokenWidget.exe（无控制台小组件）与 TokenDashboard.exe（命令行/面板）
+﻿# 打包两个 exe：TokenWidget.exe（无控制台小组件）与 TokenDashboard.exe（命令行/面板）
 # 用法：pwsh -File build_exe.ps1      （需要 uv，首次会下载 PyInstaller）
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot

@@ -60,7 +60,7 @@ uv run token-dashboard widget --self-test        # 自检：取一次数后退�
 ### 打包成 exe（长期使用推荐）
 
 ```powershell
-pwsh -File build_exe.ps1        # 需要 uv；产出 dist\TokenWidget.exe 与 dist\TokenDashboard.exe
+powershell -File build_exe.ps1   # Windows 自带 PowerShell 即可；装了 PowerShell 7 也可以 pwsh -File
 ```
 
 - `TokenWidget.exe`：无控制台，双击即出现小组件（支持传参，如 `TokenWidget.exe --interval 30`）
@@ -68,7 +68,7 @@ pwsh -File build_exe.ps1        # 需要 uv；产出 dist\TokenWidget.exe 与 di
 - 把 `dist` 整个目录拷到任意位置即可（例如 `D:\Tools\token-dashboard`）：exe 会在**同目录**创建
   `data\`（数据库/价格表/日志）与 `config\`（widget.json）
 - 构建带 `--runtime-tmpdir .`：onefile 解压目录放在 exe 同目录，不依赖 `%TEMP%`（受限机器也能跑）
-- **实测**：两个 exe 各 **27.3 MB**；`TokenDashboard.exe scan/report` 正常；`TokenWidget.exe` 双击即启动、
+- **实测**：两个 exe 各约 **28.6 MB**；`TokenDashboard.exe scan/report` 正常；`TokenWidget.exe` 双击即启动、
   启动时自动扫描并显示（日志 `dist\data\widget.log`）
 - **开机自启**：双击 `install-autostart.cmd`（把快捷方式写进「启动」文件夹）；取消用 `uninstall-autostart.cmd`
 - 也可以手动：`Win+R` → `shell:startup` → 把 `TokenWidget.exe` 的快捷方式丢进去
