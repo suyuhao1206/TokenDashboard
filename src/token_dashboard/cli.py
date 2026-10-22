@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from . import __version__
 from .config import ROOT, load_config
@@ -129,7 +130,22 @@ def cmd_widget(args) -> int:
     return run_widget(cfg, debug=args.debug, tray=not args.no_tray, log_path=args.log)
 
 
+def _utf8_console() -> None:
+    """把 stdout/stderr 切成 UTF-8。
+
+    报表、扫描汇总都是中文，而 Windows 上非中文区域（CI 的 windows-latest 就是
+    cp1252）的默认控制台编码直接 UnicodeEncodeError —— `report` 会在打印表头时崩，
+    发版流水线的冒烟测试正好会踩到。输出重定向到文件/管道时 reconfigure 同样有效。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
+
+
 def main(argv=None) -> int:
+    _utf8_console()
     ap = argparse.ArgumentParser(
         prog="token-dashboard", description="多渠道 × 多 Harness 的本地 Token 用量面板"
     )

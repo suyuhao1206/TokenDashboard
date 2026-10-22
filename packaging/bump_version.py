@@ -82,6 +82,14 @@ VSVersionInfo(
 
 
 def main(argv: list[str]) -> int:
+    # CI（windows-latest / GitHub Actions）的控制台是 cp1252，中文 print 会
+    # UnicodeEncodeError 直接把整个发版流水线打断。所有输出统一转 UTF-8。
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
     if len(argv) != 2:
         print(__doc__)
         return 2
