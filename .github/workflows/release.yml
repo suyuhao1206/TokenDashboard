@@ -1,0 +1,94 @@
+name: release
+
+# 打 tag（v*）自动构建两个 exe 并发 GitHub Release。
+# 红线（见 docs/review-2026-10-21.md D0）：发布 zip 只收白名单里的 exe + 说明文件，
+# 绝不从本机 dist/ 打包——那里有真实 usage.db / widget.log / WebView2 profile。
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:        # 支持手动跑一遍（不会发 Release）
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: uv sync
+
+      - name: 注入版本号（tag → pyproject / __init__ / exe 属性）
+        if: startsWith(github.ref, 'refs/tags/')
+        run: uv run python packaging/bump_version.py ${{ github.ref_name }}
+
+      - name: 构建 TokenWidget.exe
+        run: uv run pyinstaller --noconfirm --clean TokenWidget.spec
+
+      - name: 构建 TokenDashboard.exe
+        run: uv run pyinstaller --noconfirm --clean TokenDashboard.spec
+
+      - name: 冒烟测试（进程能起、空库不崩、版本号对得上）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\dist\TokenDashboard.exe --version
+          .\dist\TokenDashboard.exe --help
+          .\dist\TokenDashboard.exe report
+          if ("${{ github.ref_name }}".StartsWith("v")) {
+            $out = .\dist\TokenDashboard.exe --version
+            if ($out -notmatch [regex]::Escape("${{ github.ref_name }}".TrimStart("v"))) {
+              throw "版本号没注入成功：$out"
+            }
+          }
+
+      - name: 打 zip（白名单：只收两个 exe + 快速上手）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item dist\TokenWidget.exe stage\
+          Copy-Item dist\TokenDashboard.exe stage\
+          Copy-Item packaging\快速上手.txt stage\
+          # D0：白名单制，绝不整个 dist 打包（dist/data 里有真实用量库与日志）
+          Get-ChildItem stage | Select-Object Name, Length
+          $tag = if ("${{ github.ref_name }}" -like "v*") { "${{ github.ref_name }}" } else { "dev" }
+          $zip = "TokenDashboard-$tag-windows-x64.zip"
+          Compress-Archive -Path stage\* -DestinationPath $zip -Force
+          Get-Item $zip | Select-Object Name, Length
+
+      - name: 上传构建产物（手动触发时也能下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: TokenDashboard-windows-x64
+          path: TokenDashboard-*-windows-x64.zip
+          if-no-files-found: error
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: TokenDashboard-*-windows-x64.zip
+          generate_release_notes: true
+          body: |
+            ## 下载即用（Windows x64）
+
+            1. 下载下面的 zip → 解压到任意目录
+            2. 双击 `TokenWidget.exe`，桌面出现浮窗即成功
+            3. 浏览器打开 http://127.0.0.1:8787 看完整面板
+
+            > 未签名软件会被 SmartScreen 拦一次：点「更多信息」→「仍要运行」。
+            > 默认已开启开机自启，右键浮窗可一键关闭。
