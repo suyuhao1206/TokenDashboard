@@ -74,7 +74,11 @@ def scan(store, cfg: dict, pricing, tz) -> dict:
                     continue
 
                 dt = parse_iso(obj.get("timestamp"))
-                ts = to_utc_iso(dt) if dt else (obj.get("timestamp") or "")
+                if dt is None:
+                    # 无时间戳的事件进不了任何按天统计，直接跳过并计入 errors
+                    stats["errors"] += 1
+                    continue
+                ts = to_utc_iso(dt)
                 model = norm_model(raw_model)
                 cost = pricing.cost(model, inp, cr, cw, out)
                 # 去重规则（与 ccusage 对齐）：

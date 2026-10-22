@@ -34,11 +34,13 @@
 |------|------|
 | `collectors/` | 每源一个适配器：扫描 → 解析 → 输出标准事件 + 新游标 |
 | `normalize/` | 字段归一、模型名归一（别名→规范名）、时间归一（UTC）、成本计算 |
-| `store/` | SQLite 读写、幂等入库、聚合视图 / 预聚合 |
+| `store/`（`db.py`） | SQLite 读写、幂等入库、聚合视图 / 预聚合；WAL + busy_timeout |
 | `pricing/` | 价表加载、覆盖规则、渠道倍率 |
-| `server/` | FastAPI：REST + 静态页（`/api/summary`、`/api/daily`、`/api/sessions`…） |
-| `ui/` | 单页前端（ECharts），本地资源不依赖 CDN |
-| `cli/` | `scan / report / serve / doctor` 等命令 |
+| `scan.py` | 扫描编排（**不打印**）：CLI 与 serve/widget 的后台线程共用同一套逻辑 |
+| `server/`（`server.py`） | FastAPI：REST + 静态页（`/api/summary`、`/api/daily`、`/api/sessions`…）+ 生命周期里起定时扫描线程 |
+| `ui/` | 双前端共用一套设计系统：`index.html`（面板，ECharts）+ `widget.html`（浮窗，无图表库）+ `shared.css` / `shared.js` |
+| `widget_web.py` | pywebview 浮窗：内嵌/复用服务、无边框拖动、托盘、位置持久化、中文路径兼容层 |
+| `cli/` | `scan / report / serve / update-pricing / widget` |
 
 ## 4. 数据模型（草稿）
 
@@ -90,6 +92,11 @@ CREATE TABLE channels (                 -- 渠道注册表（可从 cc-switch �
 - 幂等键：本地日志用 `source + session_id + message_id/response_id`；API 用 `source + 日期 + 维度键`
 - **对账视图**：当多源同时覆盖同一时间段时，输出差异报告（如「7 月 Claude Code 本地日志 $X vs cc-switch 汇总 $Y，偏差 Z%」），**不自动合并**
 - 口径统一为五元组 `input / cache_read / cache_write / output / reasoning`；来源无法区分时记录其语义标记
+- **`output_tokens` 一律存「含推理的总输出」**（OpenAI 口径）：`reasoning_tokens` 是它的子集，
+  只用于展示「其中推理」，**不参与任何 SUM**（`_TOKENS` / pricing 都不再加它）。
+  第三方供应商（实测 Codex 里的 gemini、WorkBuddy 里的 gemini）会把推理单独加进 `totalTokens`，
+  由 `normalize.normalize_output()` 按 `total_tokens == prompt + output (+ reasoning)` 判定后归一；
+  判定不出来的按 `reasoning > output` 启发式处理。改动后与 ccusage 逐日对齐（2026-05-25 完全一致）。
 
 ### 5.1 实际实现的去重键（必须与文件物理位置解耦）
 
@@ -122,9 +129,21 @@ MVP 先做 2 + 3，代理模式作为可选增强。
 
 ## 7. 调度与运行
 
-- 单进程：`token-dashboard serve`（内置调度器，默认 10 分钟扫一次）
+- 单进程：`token-dashboard serve`（启动先扫一轮，之后每 3 分钟扫一次，`scanner.interval_minutes` 可调，0 = 关闭）
+- 桌面浮窗：`token-dashboard widget` —— 同一进程内嵌 uvicorn + 一个 WebView2 窗口；
+  端口 8787 上已有服务（用户手动起的 `serve`）就直接复用，不重复起服务
 - 也可仅用 CLI：`token-dashboard scan` + `token-dashboard report daily`
-- Windows：`start.ps1` / 计划任务；后续可 Docker
+
+并发注意（本项目踩过的点）：
+
+- **扫描不进 event loop**：`run_scan` 是同步阻塞 IO（读日志 + SQLite），放在线程里跑，
+  否则一次扫描会卡住所有 API 响应
+- **WAL + busy_timeout**：面板请求线程（长连接读）与后台扫描线程/手动扫描（写）会并发碰同一个 db 文件，
+  默认 rollback journal 下读写互斥，会偶发 `database is locked`
+- **扫描互斥**：`run_scan` 内部有一把进程内锁，手动「扫描」按钮和定时线程撞车时排队而不是并发翻倍 IO
+- **两次扫描用独立连接**：后台扫描自己 `Store(...)` 再 `close()`，不和 FastAPI 的请求连接共用
+
+- Windows：`start-widget.vbs` / 计划任务；后续可 Docker
 - 环境：Python 3.12 + uv（本机已就绪）；Node 仅在调用 ccusage 时需要
 
 ## 8. 技术栈建议

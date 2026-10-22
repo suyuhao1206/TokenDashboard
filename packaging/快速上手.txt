@@ -1,0 +1,10 @@
+1. 双击 TokenWidget.exe，右下角出现浮窗即成功
+   （首次会被 SmartScreen 拦：点「更多信息」→「仍要运行」，未签名软件的正常提示）。
+2. 浏览器打开 http://127.0.0.1:8787 看完整面板。
+3. 默认已开启开机自启；关闭：右键浮窗 → 取消勾选「开机自启」。
+
+其他
+- 数据全部留在本机：本目录下的 data\usage.db，不上传任何内容。
+- 命令行：TokenDashboard.exe scan / report / serve / update-pricing / --version
+- 日志：data\widget.log（双击没反应时先看这里）
+- 卸载：删掉整个目录 + 在「启动」文件夹里删 TokenWidget.lnk 即可。

@@ -1,8 +1,35 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
+# TokenDashboard.exe —— 命令行（scan/report/serve/update-pricing/widget）。
+#
+# `widget` 子命令同样会用到 pywebview，所以这里也把对应的数据文件与隐藏导入收进来。
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 datas = [('src/token_dashboard/ui', 'token_dashboard/ui'), ('data/pricing/litellm.json', 'token_dashboard/assets')]
 datas += collect_data_files('tzdata')
+datas += collect_data_files('webview')
+datas += collect_data_files('pythonnet')
+
+hiddenimports = (
+    collect_submodules('webview')
+    + collect_submodules('clr_loader')
+    + collect_submodules('pystray')
+    + [
+        'clr',
+        'pythonnet',
+        'System',
+        'System.Windows.Forms',
+        'System.Drawing',
+        # 延迟导入，静态分析扫不到
+        'token_dashboard.widget_web',
+        'token_dashboard.server',
+    ]
+)
+
+# 版本号由 packaging/bump_version.py 生成（CI 里按 tag 注入）；本地没有该文件时跳过
+_version_file = Path('packaging/version_info.txt')
+_version = str(_version_file) if _version_file.exists() else None
 
 
 a = Analysis(
@@ -10,7 +37,7 @@ a = Analysis(
     pathex=['src'],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -39,4 +66,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=_version,
 )

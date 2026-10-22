@@ -22,8 +22,11 @@ class UsageEvent:
     input_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    # output_tokens **含推理**（OpenAI 口径）。各采集器负责把不同供应商的定义
+    # 归一到这里，见 normalize.normalize_output；下游不要再加 reasoning_tokens。
     output_tokens: int = 0
-    reasoning_tokens: int = 0
+    reasoning_tokens: int = 0    # output 中属于推理的部分（信息量展示，不参与求和）
+
     cost_usd: float | None = None
     session_id: str | None = None
     request_id: str | None = None
@@ -37,7 +40,6 @@ class UsageEvent:
             + self.cache_read_tokens
             + self.cache_write_tokens
             + self.output_tokens
-            + self.reasoning_tokens
         )
 
     def to_row(self) -> tuple:

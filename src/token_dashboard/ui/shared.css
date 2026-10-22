@@ -1,0 +1,336 @@
+/* ============================================================================
+   Token Dashboard 共享设计系统
+   面板（index.html）与浮窗（widget.html）共用，保证两处视觉同源。
+
+   约定：颜色只在 :root 定义，其他规则一律 var()，不要写裸色值。
+   需要新颜色先加令牌。
+   ========================================================================== */
+
+:root {
+  /* ---- 深色（默认） ---- */
+  --bg: #0d1017;
+  --surface: #141824;
+  --surface2: #1a1f2e;
+  --border: #232a3a;
+  --border-strong: #2e3749;
+  --text: #e8eaf0;
+  --muted: #8b93a7;
+  --faint: #5c6478;
+  --accent: #3b82f6;
+  --green: #22c55e;
+  --amber: #eab308;
+  --red: #ef4444;
+  --on-accent: #ffffff;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 8px 24px rgba(0, 0, 0, .18);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, .38);
+  /* 热力图 5 档（由暗到亮） */
+  --hm0: #1c212b;
+  --hm1: #0e3a5c;
+  --hm2: #16639b;
+  --hm3: #2f8fdd;
+  --hm4: #6cb8ff;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface2: #eef1f6;
+  --border: #e3e7ee;
+  --border-strong: #ccd4e0;
+  --text: #161b26;
+  --muted: #667085;
+  --faint: #98a2b3;
+  --accent: #2563eb;
+  --green: #15803d;
+  --amber: #a16207;
+  --red: #dc2626;
+  --on-accent: #ffffff;
+  --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 4px 14px rgba(16, 24, 40, .06);
+  --shadow-pop: 0 12px 32px rgba(16, 24, 40, .16);
+  --hm0: #e9edf3;
+  --hm1: #c7e0f7;
+  --hm2: #8fc4ee;
+  --hm3: #4f9fe0;
+  --hm4: #1f6fb2;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 控件 ---------- */
+button {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { opacity: .42; cursor: not-allowed; }
+button:disabled:hover { border-color: var(--border-strong); }
+button.busy { opacity: .7; cursor: progress; }
+
+select, input[type=date] {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+select:hover, input[type=date]:hover { border-color: var(--accent); }
+select:focus-visible, input[type=date]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 分段控制器 */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 3px 11px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.seg button:hover { color: var(--text); background: var(--surface2); }
+.seg button.on { color: var(--on-accent); background: var(--accent); font-weight: 500; }
+.seg.sm button { padding: 2px 8px; font-size: 11.5px; }
+
+.sep { width: 1px; height: 20px; background: var(--border); }
+
+/* ---------- 卡片 / 面板 ---------- */
+.card {
+  position: relative;
+  overflow: hidden;
+  padding: 14px 16px 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 72%);
+}
+.card.good::before { background: linear-gradient(90deg, var(--green), transparent 72%); }
+.card.warn::before { background: linear-gradient(90deg, var(--amber), transparent 72%); }
+.card .k { font-size: 12px; color: var(--muted); }
+.card .v {
+  margin-top: 7px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -.6px;
+  font-variant-numeric: tabular-nums;
+}
+.card.accent .v { color: var(--accent); }
+.card.good .v { color: var(--green); }
+.card.warn .v { color: var(--amber); }
+/* 环比：这是用量统计不是股票，涨用绿、跌用红 */
+.card .d {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.card .d.up { color: var(--green); }
+.card .d.down { color: var(--red); }
+.card .d.flat { color: var(--faint); }
+.card .d .muted { color: var(--faint); font-size: 11px; }
+.card .n {
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card .n.warnc { color: var(--amber); }
+
+.panel {
+  min-width: 0;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.panel h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.panel h2 .spacer { flex: 1; }
+
+.tag {
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 17px;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+/* ---------- 状态条 / 徽章 ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 38%, var(--border)); }
+.chip.warn {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--border));
+  background: color-mix(in srgb, var(--amber) 9%, var(--surface));
+}
+.chip.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); }
+
+/* 状态条：横向排布的 chip 组，失败时右侧可出现「重试」按钮 */
+.statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.statusbar .retry { padding: 3px 11px; font-size: 11.5px; border-radius: 999px; }
+
+.hbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px 1px 7px;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.hbadge i { display: block; flex: none; width: 7px; height: 7px; border-radius: 50%; }
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+/* ---------- 表格 ---------- */
+.tablewrap { max-height: 720px; overflow: auto; }
+.tablewrap.x { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td {
+  padding: 6px 9px;
+  font-size: 12.5px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--surface);
+}
+tbody tr:hover td { background: var(--surface2); }
+td.dim { color: var(--muted); }
+.empty-row { padding: 24px 0 !important; text-align: center !important; color: var(--faint); }
+
+/* ---------- 文本工具 ---------- */
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.good { color: var(--green); }
+.warnc { color: var(--amber); }
+.copy { cursor: pointer; border-bottom: 1px dashed var(--border-strong); }
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- 骨架屏 ---------- */
+.sk-line {
+  height: 30px;
+  margin-top: 8px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 37%, var(--surface2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+/* 刷新按钮：刷新期间图标转一圈 */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .sk-line, .spin { animation: none; }
+}
+
+/* ---------- 浮层 ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  z-index: 50;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 12px);
+  transition: opacity .18s, transform .18s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }

@@ -57,6 +57,17 @@ def _builtin_defaults() -> dict:
         },
         "pricing": {"overrides_file": str(CONFIG_DIR / "pricing.overrides.yaml")},
         "ui": {"timezone": "Asia/Shanghai"},
+        # 预算提醒（M4）：本月 1 号至今的成本超过 80% / 100% 时面板状态条告警
+        "budget": {"monthly_usd": None},
+        # 后台定时扫描间隔（分钟）。0 = 关闭，面板只能手动触发扫描。
+        "scanner": {"interval_minutes": 3},
+        # 桌面浮窗（pywebview + WebView2）。尺寸单位是 CSS 像素；
+        # x / y 为 None 时交给系统居中，拖动后写回 config/widget-web.json。
+        "widget": {
+            "width": 260, "height": 246, "on_top": True, "x": None, "y": None,
+            # 首启自注册开机自启（启动文件夹快捷方式）；右键菜单可关闭
+            "autostart": True,
+        },
     }
 
 

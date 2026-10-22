@@ -11,6 +11,8 @@ dependencies = [
     "tzdata>=2024.1",
     "zstandard>=0.25.0",
     "pillow>=12.3.0",
+    "pywebview>=6.2.1",
+    "pystray>=0.19.5",
 ]
 
 [project.scripts]

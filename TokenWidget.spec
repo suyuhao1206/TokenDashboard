@@ -1,8 +1,41 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
+# TokenWidget.exe —— 无控制台桌面浮窗。
+#
+# 与 TokenDashboard.spec 的关键差异：这里必须把 pywebview / pythonnet 的运行时
+# 一起打进去，否则 exe 双击后 ImportError（`import webview` 在 run_widget 内部
+# 延迟导入，PyInstaller 的静态分析看不到它）。
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 datas = [('src/token_dashboard/ui', 'token_dashboard/ui'), ('data/pricing/litellm.json', 'token_dashboard/assets')]
 datas += collect_data_files('tzdata')
+# pywebview 的 WebView2 互操作 DLL（webview/lib）与 pythonnet 的运行时都是数据文件，
+# 不显式收会漏；hook-clr / hook-clr_loader / hook-webview / hook-pystray 负责其余的
+# 二进制与动态库（contrib hooks 里已内置）。
+datas += collect_data_files('webview')
+datas += collect_data_files('pythonnet')
+
+hiddenimports = (
+    # webview 的各平台后端是运行时按需 import 的
+    collect_submodules('webview')
+    + collect_submodules('clr_loader')
+    # pystray 的托盘后端同样按平台动态选择
+    + collect_submodules('pystray')
+    + [
+        'clr',
+        'pythonnet',
+        'System',
+        'System.Windows.Forms',
+        'System.Drawing',
+        # widget_web.run_widget 里的延迟 import，静态分析扫不到
+        'token_dashboard.widget_web',
+    ]
+)
+
+# 版本号由 packaging/bump_version.py 生成（CI 里按 tag 注入）；本地没有该文件时跳过
+_version_file = Path('packaging/version_info.txt')
+_version = str(_version_file) if _version_file.exists() else None
 
 
 a = Analysis(
@@ -10,7 +43,7 @@ a = Analysis(
     pathex=['src'],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -39,4 +72,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=_version,
 )

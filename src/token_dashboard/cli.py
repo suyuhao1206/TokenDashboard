@@ -5,41 +5,31 @@ from __future__ import annotations
 import argparse
 import json
 
-from . import collectors
-from .config import ROOT, load_config, ui_timezone
+from . import __version__
+from .config import ROOT, load_config
 from .db import Store
 from .pricing import Pricing
+from .scan import run_scan
 
 
 def cmd_scan(args) -> int:
     cfg = load_config(args.config)
-    store = Store(cfg["storage"]["db_path"])
-    pricing = Pricing(ROOT, (cfg.get("pricing") or {}).get("overrides_file"))
-    tz = ui_timezone(cfg)
+    result = run_scan(cfg)
     total = 0
-    for name, mod in collectors.ALL.items():
-        c = (cfg.get("collectors") or {}).get(name) or {}
-        if not c.get("enabled", True):
-            print(f"- {name}: 已禁用，跳过")
-            continue
-        stats = mod.scan(store, c, pricing, tz)
-        total += stats["events"]
+    for name, stats in result.items():
         # note 里可能是「缺少 zstandard 依赖」这类关键提示，不能吞掉
         note = f" | {stats['note']}" if stats.get("note") else ""
-        print(
-            f"- {stats['source']}: 入库 {stats['events']} 条 | 扫描 {stats['files']} 个文件"
-            f" | 跳过(未变化) {stats['skipped']} | 解析错误 {stats['errors']}{note}"
-        )
-    for name, mod in collectors.CHANNEL.items():
-        c = (cfg.get("collectors") or {}).get(name) or {}
-        # 与 config._builtin_defaults 保持一致（内置默认 enabled=True）
-        if not c.get("enabled", True):
-            continue
-        st = mod.scan(store, c, pricing, tz)
-        print(
-            f"- {st['source']}（渠道视图）: 入库 {st['rows']} 行 | 渠道 {st['channels']} 个"
-            f" | {st['note']}"
-        )
+        if "rows" in stats:  # 渠道采集器
+            print(
+                f"- {stats['source']}（渠道视图）: 入库 {stats['rows']} 行 | 渠道 {stats['channels']} 个"
+                f"{note}"
+            )
+        else:
+            total += stats["events"]
+            print(
+                f"- {stats['source']}: 入库 {stats['events']} 条 | 扫描 {stats['files']} 个文件"
+                f" | 跳过(未变化) {stats['skipped']} | 解析错误 {stats['errors']}{note}"
+            )
     print(f"完成：共处理 {total} 条事件（重复运行不会重复计数）")
     return 0
 
@@ -55,9 +45,10 @@ def cmd_report(args) -> int:
         print("暂无数据。先运行：token-dashboard scan")
         return 0
     print(
-        f"{'日期':<12}{'输入':>13}{'缓存读':>15}{'缓存写':>13}{'输出':>12}{'推理':>9}{'合计':>15}{'成本USD':>10}{'未定价':>7}"
+        f"{'日期':<12}{'输入':>13}{'缓存读':>15}{'缓存写':>13}{'输出含推理':>14}{'其中推理':>11}{'合计':>15}{'成本USD':>10}{'未定价':>7}"
     )
     for r in rows:
+        # 注意：output_tokens 已含推理（对齐 OpenAI 口径），这里不能再加 reasoning_tokens
         total = sum(
             r[k] or 0
             for k in (
@@ -65,7 +56,6 @@ def cmd_report(args) -> int:
                 "cache_read_tokens",
                 "cache_write_tokens",
                 "output_tokens",
-                "reasoning_tokens",
             )
         )
         cost = r["cost_usd"]
@@ -133,23 +123,17 @@ def cmd_serve(args) -> int:
 
 
 def cmd_widget(args) -> int:
-    from .widget import run_widget
-
     cfg = load_config(args.config)
-    return run_widget(
-        cfg,
-        interval=args.interval,
-        topmost=not args.no_topmost,
-        auto_scan=args.auto_scan,
-        self_test=args.self_test,
-        log_path=args.log,
-    )
+    from .widget_web import run_widget
+
+    return run_widget(cfg, debug=args.debug, tray=not args.no_tray, log_path=args.log)
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="token-dashboard", description="多渠道 × 多 Harness 的本地 Token 用量面板"
     )
+    ap.add_argument("--version", action="version", version=f"token-dashboard {__version__}")
     sub = ap.add_subparsers(dest="cmd")
 
     p = sub.add_parser("scan", help="扫描并入库本地日志")
@@ -175,11 +159,9 @@ def main(argv=None) -> int:
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("widget", help="启动桌面小组件（浮窗）")
-    p.add_argument("--interval", type=int, default=60, help="刷新间隔（秒，默认 60）")
-    p.add_argument("--auto-scan", type=int, default=15, help="自动扫描间隔（分钟，0=关闭）")
-    p.add_argument("--no-topmost", action="store_true", help="不置顶")
-    p.add_argument("--self-test", action="store_true", help="自检：取一次数后自动退出")
-    p.add_argument("--log", help="把运行日志写到该文件（pythonw 无控制台时排查用）")
+    p.add_argument("--debug", action="store_true", help="pywebview 调试模式（打开 DevTools）")
+    p.add_argument("--no-tray", action="store_true", help="不创建系统托盘图标")
+    p.add_argument("--log", help="日志文件（无控制台启动时排查问题用）")
     p.add_argument("--config")
     p.set_defaults(func=cmd_widget)
 

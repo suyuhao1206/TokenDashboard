@@ -87,3 +87,27 @@ ui:
   timezone: Asia/Shanghai
   theme: auto
   default_range: 30d
+
+# ---------- 预算提醒 ----------
+# 本月 1 号至今的成本达到预算的 80% 时状态条转 amber、超支转红；
+# 设成 null 表示不启用。
+budget:
+  monthly_usd: 100
+
+# ---------- 后台定时扫描 ----------
+# serve / widget 启动后每 N 分钟扫一轮本地日志，面板数据自己保持新鲜。
+# 设为 0 关闭（只想看历史数据时用），此时面板只能靠「扫描」按钮或命令行手动入库。
+scanner:
+  interval_minutes: 3
+
+# ---------- 桌面浮窗 ----------
+# pywebview + 系统自带 WebView2（Win11 免装运行时）。尺寸是 CSS 像素。
+widget:
+  width: 260
+  height: 246
+  on_top: true
+  # x / y 为 null 时交给系统居中；拖动后会写回 config/widget-web.json 记住位置
+  x: null
+  y: null
+  # 首启自动注册开机自启（启动文件夹快捷方式），右键菜单可一键关闭
+  autostart: true

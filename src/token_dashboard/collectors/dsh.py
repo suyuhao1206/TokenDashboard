@@ -112,7 +112,11 @@ def scan(store, cfg: dict, pricing, tz) -> dict:
                 continue
 
             dt = _ms_to_dt(obj.get("time"))
-            ts = to_utc_iso(dt) if dt else ""
+            if dt is None:
+                # 无时间戳的事件进不了任何按天统计，直接跳过并计入 errors
+                stats["errors"] += 1
+                continue
+            ts = to_utc_iso(dt)
             model = norm_model(current_model)
             cost = pricing.cost(model, inp, cr, 0, out)
             events.append(

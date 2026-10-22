@@ -99,6 +99,13 @@ class Pricing:
         output_tokens: int,
         reasoning: int = 0,
     ) -> float | None:
+        """按价格表算成本。
+
+        `output_tokens` 必须已经是**含推理**的总输出（见 UsageEvent 的注释）：
+        OpenAI 系 `completion_tokens` 本就把推理算在里面，再叠加 reasoning 会双算
+        （实测 2026-05-25 Codex：多算 $0.2045，正好等于推理量 × 输出费率）。
+        `reasoning` 参数保留只为调用方兼容，不参与计算。
+        """
         if not model:
             return None
         rates = self.table.get(model.lower())
@@ -111,7 +118,7 @@ class Pricing:
             ("input", input_tokens),
             ("cache_read", cache_read),
             ("cache_write", cache_write),
-            ("output", output_tokens + reasoning),
+            ("output", output_tokens),
         ):
             rate = rates.get(key)
             if rate is None:

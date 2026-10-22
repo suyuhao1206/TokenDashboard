@@ -33,7 +33,17 @@
   - 文件首条事件无前序基线，用其 `last_token_usage / usage` —— 续写文件（同会话分叉成新文件）的首条累计包含上一段用量，直接用累计会重复计入；
   - 拆分：`非缓存输入 = max(0, Δinput − Δcached)`，`缓存读取 = min(Δinput, Δcached)`；
   - 模型/项目：`turn_context.payload.model / payload.cwd`、`session_meta` 顺序关联。
-- 验证：2026-05-01 ~ 2026-09-30 逐日与 ccusage 对齐，**仅 3 天存在差异**（06-04、06-07、07-30，各为单会话内数百~数十万 tokens 的细微差异，占总量的 <0.1%，原因待查）；2026-08-01~08-10、05 月、09 月完全一致。
+- **output 与 reasoning 的关系（2026-10-21 核实并修正）**：
+  - OpenAI 系（`gpt-5.x`）：`total_tokens == input + output`，`reasoning_output_tokens` 是
+    `output_tokens` 的子集 —— 过去按 `output + reasoning` 求和导致总量与成本双算；
+  - 第三方（`gemini-*` 走 Codex CLI 时）：`total_tokens == input + output + reasoning`，推理要单独加；
+  - 现在统一用 `normalize.normalize_output()` 按 `total_tokens` 判定后归一成「含推理的输出」，
+    下游只加 `output_tokens`。核对样例：2026-05-25 输出 11,587 / 推理 6,818 / 总量 393,488 /
+    成本 $0.909275，与 `npx ccusage codex daily` 完全一致（修正前总量 400,306、成本 $1.1138）。
+- 验证：2026-05-01 ~ 2026-09-30 逐日与 ccusage 对齐；05 月、09 月完全一致。
+  仍有个别日期差异（06-04、06-07、07-30，以及部分 gemini 日期）：ccusage 对第三方记录的
+  `total_tokens` 口径与 `output + reasoning` 不一致（它自己还会再把 reasoning 加进 total），
+  属于 ccusage 侧口径问题；本工具以「不重复计数」为准。
 - 其他：`~/.codex/session_index.jsonl`（`id / thread_name / updated_at`）；`state_5.sqlite` 等内部库不作为统计源。
 
 ### A3. DSH / DeepSeek Harness（✅ 已实测）

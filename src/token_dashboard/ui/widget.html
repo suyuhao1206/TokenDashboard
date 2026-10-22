@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Token Widget</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<script>
+/* 主题要在样式表之前定，避免闪一帧深色 */
+try {
+  var saved = localStorage.getItem("td-theme");
+  document.documentElement.dataset.theme = (saved === "light" || saved === "dark")
+    ? saved : "dark";   /* 浮窗默认深色：桌面角落一块深色更不抢眼 */
+} catch (e) {}
+</script>
+<link rel="stylesheet" href="/static/shared.css">
+<style>
+  /* 浮窗专属：整页就是一张卡，不要滚动条 */
+  html, body { height: 100%; overflow: hidden; }
+  body { border-radius: var(--radius); }
+  .sheet {
+    height: 100%; display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    user-select: none;
+  }
+
+  /* 标题栏：拖动区 */
+  .titlebar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px 6px;
+    cursor: grab;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--surface2), transparent);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .titlebar:active { cursor: grabbing; }
+  .titlebar .logo { color: var(--accent); font-size: 13px; line-height: 1; }
+  .titlebar .name { font-size: 11.5px; font-weight: 600; letter-spacing: .2px; }
+  .titlebar .clock { margin-left: auto; font-size: 10.5px; color: var(--faint);
+                     font-variant-numeric: tabular-nums; }
+  .titlebar button {
+    padding: 1px 6px; font-size: 11px; line-height: 1.5;
+    background: transparent; border-color: transparent; color: var(--muted);
+  }
+  .titlebar button:hover { color: var(--text); background: var(--surface2); border-color: var(--border); }
+  .titlebar .iconbtn { font-size: 12px; }
+
+  .body { padding: 7px 12px 9px; flex: 1; display: flex; flex-direction: column;
+          gap: 5px; min-height: 0; }
+
+  .row-today { display: flex; align-items: baseline; gap: 8px; line-height: 1.1; }
+  .row-today .v {
+    font-size: 25px; font-weight: 600; letter-spacing: -.7px;
+    color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .row-today .cost {
+    margin-left: auto; font-size: 12px; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .row-today .cost.none { color: var(--faint); font-size: 10.5px; }
+  .label { font-size: 10.5px; color: var(--faint); line-height: 1.2; }
+
+  .row-sub { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-sub b { color: var(--text); font-weight: 600; }
+
+  /* 7 日迷你柱：纯 flex + 高度百分比，不引入图表库。
+     flex:1 吃掉剩余高度——浮窗被拉高时柱子跟着变高，而不是留一块空白。 */
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-top: 1px;
+           flex: 1 1 auto; min-height: 26px; max-height: 64px; }
+  .spark .bar {
+    flex: 1; min-height: 2px; border-radius: 2px 2px 0 0;
+    background: color-mix(in srgb, var(--accent) 38%, var(--surface2));
+    transition: height .3s ease;
+    cursor: pointer;
+  }
+  .spark .bar.last { background: var(--accent); }
+  .spark .bar:hover { background: var(--accent); }
+  .spark .bar.void { background: transparent; cursor: default; }
+
+  .row-harness { display: flex; gap: 8px; font-size: 10px; color: var(--muted);
+                 font-variant-numeric: tabular-nums; white-space: nowrap;
+                 overflow: hidden; }
+  .row-harness span { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+  .row-harness i { width: 6px; height: 6px; border-radius: 50%; display: block; flex: none; }
+
+  .foot { display: flex; align-items: center; gap: 5px;
+          font-size: 10px; color: var(--faint); }
+  .foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex: none; }
+  .foot .dot.warn { background: var(--amber); }
+  .foot .dot.err { background: var(--red); }
+  .foot .spacer { flex: 1; }
+  .foot button { padding: 0 5px; font-size: 10px; background: transparent;
+                 border-color: transparent; color: var(--faint); }
+  .foot button:hover { color: var(--text); }
+
+  /* 右键菜单 */
+  .menu {
+    position: fixed; z-index: 90; min-width: 132px;
+    padding: 4px; background: var(--surface2);
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    box-shadow: var(--shadow-pop);
+    display: none;
+  }
+  .menu.show { display: block; }
+  .menu button {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 5px 9px; font-size: 11.5px; text-align: left;
+    background: transparent; border: 0; border-radius: 6px; color: var(--text);
+  }
+  .menu button:hover { background: var(--accent); color: var(--on-accent); }
+  .menu .sep { height: 1px; margin: 3px 4px; background: var(--border); }
+
+  /* 提示条：Esc 二次确认 / 置顶 / 自启切换都需要它（shared.js 的 toast() 依赖 #toast） */
+  #toast { position: fixed; left: 50%; bottom: 10px; z-index: 95;
+           max-width: calc(100% - 20px); padding: 5px 10px; font-size: 11px;
+           color: var(--text); background: var(--surface2);
+           border: 1px solid var(--border-strong); border-radius: 7px;
+           box-shadow: var(--shadow-pop); text-align: center;
+           opacity: 0; pointer-events: none; transform: translate(-50%, 8px);
+           transition: opacity .15s, transform .15s; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="titlebar" id="titlebar" title="拖动移动 · 双击打开面板">
+    <span class="logo">⚡</span>
+    <span class="name">Token</span>
+    <span class="clock" id="clock">--:--</span>
+    <button class="iconbtn" id="btnRefresh" title="刷新">↻</button>
+    <button class="iconbtn" id="btnClose" title="退出">✕</button>
+  </div>
+
+  <div class="body">
+    <div class="label">今日</div>
+    <div class="row-today">
+      <span class="v" id="todayTokens">–</span>
+      <span class="cost" id="todayCost">–</span>
+    </div>
+
+    <div class="row-sub">
+      近 7 天 <b id="d7Tokens">–</b> · <b id="d7Cost">–</b>
+    </div>
+
+    <div class="spark" id="spark" title="近 7 天用量"></div>
+
+    <div class="row-harness" id="harness"></div>
+
+    <div class="foot">
+      <span class="dot" id="dot"></span>
+      <span id="status">连接中…</span>
+      <span class="spacer"></span>
+      <button id="btnPanel" title="在浏览器中打开完整面板">面板 ↗</button>
+    </div>
+  </div>
+</div>
+
+<div class="menu" id="menu">
+  <button data-act="refresh">↻ 刷新</button>
+  <button data-act="panel">↗ 打开面板</button>
+  <button data-act="top">⇧ 置顶</button>
+  <button data-act="autostart">⇧ 开机自启</button>
+  <div class="sep"></div>
+  <button data-act="quit">✕ 退出</button>
+</div>
+<div id="toast"></div>
+
+<script src="/static/shared.js"></script>
+<script>
+const POLL_MS = 30000;
+const state = { data: null, timer: null, top: true, autostart: false };
+
+/* ---------- 渲染 ---------- */
+function renderSpark(daily) {
+  const el = document.getElementById("spark");
+  // 近 7 天（含今天），缺的天补 0
+  const days = [];
+  for (let i = 6; i >= 0; i--) days.push(daysAgo(i));
+  const map = {};
+  (daily || []).forEach(r => { map[r.date] = r.tokens || 0; });
+  const vals = days.map(d => map[d] || 0);
+  const max = Math.max(...vals, 1);
+  // C8：柱子带 data-date，点击跳到面板并筛选到那一天
+  el.innerHTML = vals.map((v, i) => {
+    const pct = Math.max(3, Math.round(v / max * 100));
+    const cls = "bar" + (i === vals.length - 1 ? " last" : "") + (v ? "" : " void");
+    return `<div class="${cls}" data-date="${esc(days[i])}" style="height:${pct}%"
+      title="${esc(days[i])} · ${esc(compact(v))}（点击打开面板）"></div>`;
+  }).join("");
+}
+
+function render(summary, daily, meta) {
+  const all = summary.all || {}, today = summary.today || {}, d7 = summary.last7d || {};
+  const tk = o => (o && o.events) ? (o.tokens || 0) : 0;
+
+  document.getElementById("todayTokens").textContent = compact(tk(today));
+  const costEl = document.getElementById("todayCost");
+  if (isNum(today.cost)) {
+    costEl.textContent = money(today.cost);
+    costEl.classList.remove("none");
+  } else {
+    costEl.textContent = tk(today) ? "未定价" : "—";
+    costEl.classList.add("none");
+  }
+
+  document.getElementById("d7Tokens").textContent = compact(tk(d7));
+  const d7CostEl = document.getElementById("d7Cost");
+  d7CostEl.textContent = isNum(d7.cost) ? money(d7.cost) : (tk(d7) ? "未定价" : "—");
+
+  renderSpark(daily);
+
+  const hs = (summary.by_harness || []).slice(0, 2);
+  document.getElementById("harness").innerHTML = hs.map(h =>
+    `<span><i style="background:${colorFor(h.harness || "-")}"></i>${esc(h.harness || "-")} ${esc(compact(h.tokens))}</span>`
+  ).join("");
+
+  const unpriced = all.unpriced || 0;
+  const dot = document.getElementById("dot");
+  dot.className = "dot" + (unpriced > 0 ? " warn" : "");
+  document.getElementById("status").textContent =
+    unpriced > 0 ? `${fmt(unpriced)} 条未定价` : "数据正常";
+
+  const now = new Date();
+  document.getElementById("clock").textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  document.title = `Token · ${compact(tk(today))}`;
+  applyMenuState();
+}
+
+function setStatus(text, kind) {
+  const dot = document.getElementById("dot");
+  dot.className = "dot" + (kind ? " " + kind : "");
+  document.getElementById("status").textContent = text;
+}
+
+/* ---------- 取数 ---------- */
+async function refresh(silent) {
+  const btn = document.getElementById("btnRefresh");
+  if (!silent) {
+    btn.disabled = true;
+    btn.classList.add("spin");
+  }
+  try {
+    const [summary, daily, meta] = await Promise.all([
+      jget("/api/summary"),
+      jget("/api/daily?dim=total&since=" + daysAgo(6)),
+      jget("/api/meta"),
+    ]);
+    state.data = { summary, daily, meta };
+    render(summary, daily, meta);
+  } catch (e) {
+    setStatus("连不上服务", "err");
+  } finally {
+    if (!silent) {
+      btn.disabled = false;
+      btn.classList.remove("spin");
+    }
+  }
+}
+
+function startPolling() {
+  stopPolling();
+  state.timer = setInterval(() => refresh(true), POLL_MS);
+}
+function stopPolling() {
+  if (state.timer) clearInterval(state.timer);
+  state.timer = null;
+}
+
+/* ---------- 桥调用（在浏览器里打开 widget.html 时 pywebview 不存在，要兜底） ---------- */
+const hasBridge = () => window.pywebview && window.pywebview.api;
+const call = async (name, ...args) => {
+  if (!hasBridge()) return null;
+  return window.pywebview.api[name](...args);
+};
+
+/* ---------- C7：右键菜单的勾选状态 ----------
+ * 以前点完「置顶」只有 toast，菜单里看不出当前状态；自启同理。
+ * 每次打开菜单前按真实状态重绘勾选标记（✓ / ⇧）。 */
+function applyMenuState() {
+  const topBtn = document.querySelector('#menu button[data-act="top"]');
+  const autoBtn = document.querySelector('#menu button[data-act="autostart"]');
+  if (topBtn) topBtn.textContent = (state.top ? "✓" : "⇧") + " 置顶";
+  if (autoBtn) autoBtn.textContent = (state.autostart ? "✓" : "⇧") + " 开机自启";
+}
+
+async function syncState() {
+  const st = await call("get_state");
+  if (st && typeof st === "object") {
+    state.top = !!st.on_top;
+    state.autostart = !!st.autostart;
+    // 首启默认开启自启时后端会带一条 notice：这里 toast 一次，保证「可见地告知」
+    if (st.notice) toast(st.notice);
+  }
+  applyMenuState();
+}
+
+/* ---------- 交互 ---------- */
+function bind() {
+  const tb = document.getElementById("titlebar");
+  let down = null;
+
+  tb.addEventListener("mousedown", e => {
+    if (e.target.closest("button")) return;
+    down = { x: e.screenX, y: e.screenY, moved: false };
+  });
+  // 拖动：交给系统（WM_NCLBUTTONDOWN），只在起点没按在按钮上时触发
+  tb.addEventListener("mousemove", e => {
+    if (!down || down.moved) return;
+    if (Math.abs(e.screenX - down.x) + Math.abs(e.screenY - down.y) < 3) return;
+    down.moved = true;
+    call("begin_drag");
+  });
+  document.addEventListener("mouseup", () => { down = null; });
+  tb.addEventListener("dblclick", e => {
+    if (e.target.closest("button")) return;
+    call("open_panel");
+  });
+
+  document.getElementById("btnRefresh").onclick = () => refresh(false);
+  document.getElementById("btnPanel").onclick = () => call("open_panel");
+  document.getElementById("btnClose").onclick = () => call("quit");
+
+  // C8：点迷你柱 → 面板按那天筛选
+  document.getElementById("spark").addEventListener("click", e => {
+    const bar = e.target.closest(".bar[data-date]");
+    if (!bar) return;
+    call("open_panel", bar.dataset.date, bar.dataset.date);
+  });
+
+  // 右键自定义菜单（禁用默认菜单）
+  const menu = document.getElementById("menu");
+  document.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    applyMenuState();
+    menu.classList.add("show");
+    const pad = 6;
+    let x = e.clientX, y = e.clientY;
+    if (x + menu.offsetWidth + pad > innerWidth) x = innerWidth - menu.offsetWidth - pad;
+    if (y + menu.offsetHeight + pad > innerHeight) y = innerHeight - menu.offsetHeight - pad;
+    menu.style.left = Math.max(pad, x) + "px";
+    menu.style.top = Math.max(pad, y) + "px";
+  });
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#menu")) menu.classList.remove("show");
+  });
+  menu.addEventListener("click", e => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    menu.classList.remove("show");
+    const act = b.dataset.act;
+    if (act === "refresh") refresh(false);
+    else if (act === "panel") call("open_panel");
+    else if (act === "top") {
+      // 先本地翻转，桥返回真实值再校正
+      state.top = !state.top;
+      call("set_topmost", state.top).then(v => {
+        if (typeof v === "boolean") state.top = v;
+        applyMenuState();
+        toast(state.top ? "已置顶" : "已取消置顶");
+      });
+    } else if (act === "autostart") {
+      const want = !state.autostart;
+      call("set_autostart", want).then(v => {
+        state.autostart = typeof v === "boolean" ? v : want;
+        applyMenuState();
+        toast(state.autostart ? "已开启开机自启" : "已关闭开机自启");
+      });
+    } else if (act === "quit") call("quit");
+  });
+
+  // A9：Esc 二次确认（无边框小窗里 Esc 是高频误按键，一按就没进程了）
+  let escArmed = false, escTimer = null;
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      if (escArmed) {
+        clearTimeout(escTimer);
+        escArmed = false;
+        call("quit");
+        return;
+      }
+      escArmed = true;
+      toast("再按一次 Esc 退出");
+      escTimer = setTimeout(() => { escArmed = false; }, 2000);
+    }
+    if (e.key === "r" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); refresh(false); }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopPolling();
+    else { refresh(true); startPolling(); }
+  });
+}
+
+/* ---------- 启动 ---------- */
+bind();
+applyMenuState();
+syncState();
+refresh(true);
+startPolling();
+// 每 30s 顺手更新一次时钟（即使没拉到新数据）
+setInterval(() => {
+  const now = new Date();
+  document.getElementById("clock").textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+}, 20000);
+</script>
+</body>
+</html>

@@ -1,11 +1,18 @@
 # 数据与本地配置
-data/
+# 用 data/* 而不是 data/：后者会把整个目录排除，导致下面的 ! 例外永远失效。
+data/*
+# 例外：内置价格表快照要进仓库——两个 .spec 都把它打进了 exe，
+# CI 全新 checkout 时没有它 PyInstaller 会直接失败（发布链路的关键依赖）。
+!data/pricing/
+!data/pricing/litellm.json
 *.db
 *.db-wal
 *.db-shm
 *.sqlite
 *.sqlite3
 config/config.yaml
+# 浮窗位置/置顶是运行时写回的状态，不是配置
+config/widget-web.json
 .env
 pricing.overrides.yaml
 
@@ -20,9 +27,24 @@ build/
 dist/
 *.log
 
+# PyInstaller onefile 在 cwd 解压出来的运行目录（--runtime-tmpdir .）
+_MEI*/
+
+# WebView2 的临时 profile 目录。
+# 以前没给 storage_path，pywebview 每次启动都在 cwd 建一个 tmpXXXX（~7MB，删不掉）。
+# 现在固定到 data/webview2（随 data/ 一起忽略），这条只是兜底。
+tmp???????/
+
+
 # Node（如后续引入前端构建）
 node_modules/
 
 # 杂项
 .DS_Store
 Thumbs.db
+
+
+# 发版中间产物（CI / 本地打包时生成）
+packaging/version_info.txt
+stage/
+TokenDashboard-*.zip

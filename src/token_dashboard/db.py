@@ -113,9 +113,9 @@ _DIMS = {
     "source": "source",
 }
 
-_TOKENS = (
-    "SUM(input_tokens+cache_read_tokens+cache_write_tokens+output_tokens+reasoning_tokens)"
-)
+# output_tokens 已含推理（见 models.UsageEvent 的注释），不能再 + reasoning_tokens
+_TOKEN_SUM = "input_tokens+cache_read_tokens+cache_write_tokens+output_tokens"
+_TOKENS = f"SUM({_TOKEN_SUM})"
 
 
 class Store:
@@ -206,7 +206,7 @@ class Store:
 
     # ---------- 通用过滤 ----------
     @staticmethod
-    def _filter(since=None, until=None, harness=None, channel=None):
+    def _filter(since=None, until=None, harness=None, channel=None, model=None):
         frag = ""
         args: list = []
         if since:
@@ -221,11 +221,14 @@ class Store:
         if channel:
             frag += " AND channel = ?"
             args.append(channel)
+        if model:
+            frag += " AND model = ?"
+            args.append(model)
         return frag, args
 
     # ---------- 查询 ----------
-    def daily_report(self, since=None, until=None, harness=None) -> list[sqlite3.Row]:
-        frag, args = self._filter(since, until, harness)
+    def daily_report(self, since=None, until=None, harness=None, model=None) -> list[sqlite3.Row]:
+        frag, args = self._filter(since, until, harness, model=model)
         sql = f"""
         SELECT local_date AS date,
                SUM(input_tokens) AS input_tokens,
@@ -244,9 +247,9 @@ class Store:
         with self._lock:
             return self.conn.execute(sql, args).fetchall()
 
-    def daily_by(self, dim="harness", since=None, until=None, harness=None) -> list[sqlite3.Row]:
+    def daily_by(self, dim="harness", since=None, until=None, harness=None, model=None) -> list[sqlite3.Row]:
         col = _DIMS.get(dim, "harness")
-        frag, args = self._filter(since, until, harness)
+        frag, args = self._filter(since, until, harness, model=model)
         sql = f"""
         SELECT local_date AS date, COALESCE({col}, '-') AS key,
                {_TOKENS} AS tokens, SUM(cost_usd) AS cost
@@ -257,9 +260,9 @@ class Store:
         with self._lock:
             return self.conn.execute(sql, args).fetchall()
 
-    def breakdown(self, dim="model", since=None, until=None, harness=None, limit=20) -> list[sqlite3.Row]:
+    def breakdown(self, dim="model", since=None, until=None, harness=None, limit=20, model=None) -> list[sqlite3.Row]:
         col = _DIMS.get(dim, "model")
-        frag, args = self._filter(since, until, harness)
+        frag, args = self._filter(since, until, harness, model=model)
         sql = f"""
         SELECT COALESCE({col}, '-') AS key, COUNT(*) AS events,
                {_TOKENS} AS tokens, SUM(cost_usd) AS cost
@@ -271,27 +274,43 @@ class Store:
         with self._lock:
             return self.conn.execute(sql, args).fetchall()
 
-    def sessions(self, limit=50, since=None, until=None, harness=None) -> list[sqlite3.Row]:
-        frag, args = self._filter(since, until, harness)
+    def sessions(self, limit=50, since=None, until=None, harness=None, model=None) -> list[sqlite3.Row]:
+        frag, args = self._filter(since, until, harness, model=model)
         # 没有 session_id 的事件按「来源 + 文件」聚合，避免每个单事件伪会话独占一行
-        # （注意：GROUP BY 里必须写完整表达式——SQLite 会把同名的 session_id 解析成
-        #  输入列，导致所有 NULL 会话被并成一行）
+        # （注意：必须写完整表达式——SQLite 会把同名的 session_id 解析成输入列）
         sid = (
             "CASE WHEN session_id IS NOT NULL THEN session_id "
             "WHEN instr(raw_ref, ':') > 0 "
             "THEN source || '·' || substr(raw_ref, 1, instr(raw_ref, ':') - 1) "
             "ELSE COALESCE(raw_ref, '-') END"
         )
+        # project 不能写 MAX(project)：那是字母序最大，不是「最近使用的项目」，
+        # 跨目录会话（同一 session_id 换过 cwd）会显示错项目。
+        # 用窗口函数把整组统计带到每一行，再取「最后活跃那一行」（rn=1）：
+        # project 天然就是最后活跃的项目，与 ended 同口径；伪会话（按文件聚合）也正确。
         sql = f"""
-        SELECT {sid} AS session_id,
-               CASE WHEN session_id IS NULL THEN 1 ELSE 0 END AS pseudo,
-               harness, MAX(project) AS project,
-               MIN(ts) AS started, MAX(ts) AS ended, COUNT(*) AS events,
-               {_TOKENS} AS tokens, SUM(cost_usd) AS cost,
-               SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END) AS unpriced
-        FROM usage_events
-        WHERE 1=1{frag}
-        GROUP BY {sid}, harness ORDER BY MAX(ts) DESC LIMIT ?
+        SELECT session_id, pseudo, harness, project, started, ended, events,
+               tokens, cost, unpriced
+        FROM (
+            SELECT {sid} AS session_id,
+                   CASE WHEN session_id IS NULL THEN 1 ELSE 0 END AS pseudo,
+                   harness, project,
+                   MIN(ts) OVER w AS started,
+                   MAX(ts) OVER w AS ended,
+                   COUNT(*) OVER w AS events,
+                   SUM({_TOKEN_SUM}) OVER w AS tokens,
+                   SUM(cost_usd) OVER w AS cost,
+                   SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END) OVER w AS unpriced,
+                   ROW_NUMBER() OVER (PARTITION BY {sid}, harness ORDER BY ts DESC, id DESC) AS rn
+            FROM usage_events
+            -- 与日报/KPI/热力图对齐：local_date 为空的事件不参与任何按天统计，
+            -- 会话明细里也不显示（否则两个区块对不上账）
+            WHERE local_date IS NOT NULL{frag}
+            WINDOW w AS (PARTITION BY {sid}, harness)
+        )
+        WHERE rn = 1
+        ORDER BY ended DESC, session_id
+        LIMIT ?
         """
         args = args + [limit]
         with self._lock:
@@ -312,8 +331,8 @@ class Store:
                 "SUM(cost_usd) AS cost FROM usage_events GROUP BY harness ORDER BY tokens DESC"
             ).fetchall()
 
-    def totals(self, since=None, until=None, harness=None) -> dict:
-        frag, args = self._filter(since, until, harness)
+    def totals(self, since=None, until=None, harness=None, model=None) -> dict:
+        frag, args = self._filter(since, until, harness, model=model)
         sql = (
             "SELECT COUNT(*) AS events, "
             f"{_TOKENS} AS tokens, "
@@ -331,11 +350,32 @@ class Store:
         return dict(row) if row else {}
 
     # ---------- 最近请求（分页） ----------
+    # 排序白名单：绝不能把用户传入的字符串拼进 SQL。key -> (表达式, 是否数值)
+    _SORTS = {
+        "ts": ("ts", False),
+        "total": (f"({_TOKEN_SUM})", True),
+        "cost": ("cost_usd", True),
+        "input": ("input_tokens", True),
+        "output": ("output_tokens", True),
+    }
+
+    @classmethod
+    def _order_by(cls, sort: str | None, order: str | None) -> str:
+        col, numeric = cls._SORTS.get((sort or "ts").lower(), cls._SORTS["ts"])
+        desc = (order or "desc").lower() != "asc"
+        direction = "DESC" if desc else "ASC"
+        if numeric:
+            # 数值列：NULL（未定价）永远排最后，不管升序降序
+            return f"{col} IS NULL, {col} {direction}, id DESC"
+        return f"{col} {direction}, id {direction}"
+
     def recent_requests(self, page: int = 1, size: int = 20,
-                        since=None, until=None, harness=None) -> dict:
-        frag, args = self._filter(since, until, harness)
+                        since=None, until=None, harness=None, model=None,
+                        sort="ts", order="desc") -> dict:
+        frag, args = self._filter(since, until, harness, model=model)
         page = max(1, int(page))
         size = min(200, max(1, int(size)))
+        order_sql = self._order_by(sort, order)
         with self._lock:
             total = self.conn.execute(
                 "SELECT COUNT(*) FROM usage_events WHERE 1=1" + frag, args
@@ -345,15 +385,53 @@ class Store:
                 "input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, "
                 "reasoning_tokens, cost_usd, session_id "
                 "FROM usage_events WHERE 1=1" + frag +
-                " ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?",
+                f" ORDER BY {order_sql} LIMIT ? OFFSET ?",
                 args + [size, (page - 1) * size],
             ).fetchall()
         return {"total": total, "page": page, "size": size,
-                "rows": [dict(r) for r in rows]}
+                "rows": [dict(r) for r in rows], "sort": sort, "order": order}
+
+    def export_requests(self, since=None, until=None, harness=None, model=None,
+                        sort="ts", order="desc") -> list[sqlite3.Row]:
+        """CSV 导出用：同一套过滤与排序，但不分页。"""
+        frag, args = self._filter(since, until, harness, model=model)
+        order_sql = self._order_by(sort, order)
+        with self._lock:
+            return self.conn.execute(
+                "SELECT ts, local_date, harness, model, raw_model, channel, project, "
+                "input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, "
+                "reasoning_tokens, cost_usd, session_id "
+                "FROM usage_events WHERE 1=1" + frag + f" ORDER BY {order_sql}",
+                args,
+            ).fetchall()
+
+    # ---------- 渠道视图 ----------
+    def channel_daily_by_model(self, since=None, until=None, channels=None) -> list[sqlite3.Row]:
+        """按渠道 × 模型 × 天汇总（渠道区块的筛选与趋势图用）。"""
+        frag = ""
+        args: list = []
+        if since:
+            frag += " AND date >= ?"
+            args.append(since)
+        if until:
+            frag += " AND date <= ?"
+            args.append(until)
+        if channels:
+            frag += " AND channel IN (" + ",".join(["?"] * len(channels)) + ")"
+            args.extend(channels)
+        sql = (
+            "SELECT channel, date, model, SUM(requests) AS requests, "
+            "SUM(input_tokens) AS input_tokens, SUM(cache_read_tokens) AS cache_read_tokens, "
+            "SUM(cache_write_tokens) AS cache_write_tokens, SUM(output_tokens) AS output_tokens, "
+            "SUM(cost_usd) AS cost_usd "
+            "FROM channel_daily WHERE 1=1" + frag + " GROUP BY channel, date, model ORDER BY date"
+        )
+        with self._lock:
+            return self.conn.execute(sql, args).fetchall()
 
     # ---------- 活跃时段（按 UTC 小时聚合，调用方负责换算到本地时区） ----------
-    def hourly(self, since=None, until=None, harness=None) -> list[sqlite3.Row]:
-        frag, args = self._filter(since, until, harness)
+    def hourly(self, since=None, until=None, harness=None, model=None) -> list[sqlite3.Row]:
+        frag, args = self._filter(since, until, harness, model=model)
         sql = f"""
         SELECT CAST(substr(ts, 12, 2) AS INTEGER) AS utc_hour,
                COUNT(*) AS events, {_TOKENS} AS tokens
@@ -372,6 +450,12 @@ class Store:
                     "SELECT DISTINCT harness FROM usage_events WHERE harness IS NOT NULL ORDER BY harness"
                 )
             ]
+            models = [
+                r[0]
+                for r in self.conn.execute(
+                    "SELECT DISTINCT model FROM usage_events WHERE model IS NOT NULL ORDER BY model"
+                )
+            ]
             channels = [
                 r[0]
                 for r in self.conn.execute(
@@ -386,6 +470,7 @@ class Store:
             ).fetchone()
         return {
             "harnesses": harnesses,
+            "models": models,
             "channels": channels,
             "min_date": row["min_date"],
             "max_date": row["max_date"],
@@ -411,7 +496,7 @@ class Store:
             )
         return len(rows)
 
-    def channel_daily(self, since=None, until=None) -> list[sqlite3.Row]:
+    def channel_daily(self, since=None, until=None, channels=None) -> list[sqlite3.Row]:
         frag = ""
         args: list = []
         if since:
@@ -420,6 +505,9 @@ class Store:
         if until:
             frag += " AND date <= ?"
             args.append(until)
+        if channels:
+            frag += " AND channel IN (" + ",".join(["?"] * len(channels)) + ")"
+            args.extend(channels)
         sql = (
             "SELECT channel, date, SUM(requests) AS requests, "
             "SUM(input_tokens) AS input_tokens, SUM(cache_read_tokens) AS cache_read_tokens, "
@@ -441,7 +529,7 @@ class Store:
             )
             return cur.rowcount
 
-    def channel_summary(self, since=None, until=None) -> list[sqlite3.Row]:
+    def channel_summary(self, since=None, until=None, channels=None) -> list[sqlite3.Row]:
         frag = ""
         args: list = []
         if since:
@@ -450,6 +538,9 @@ class Store:
         if until:
             frag += " AND date <= ?"
             args.append(until)
+        if channels:
+            frag += " AND channel IN (" + ",".join(["?"] * len(channels)) + ")"
+            args.extend(channels)
         sql = (
             "SELECT channel, SUM(requests) AS requests, "
             "SUM(input_tokens) AS input_tokens, SUM(cache_read_tokens) AS cache_read_tokens, "

@@ -29,11 +29,12 @@ import json
 from pathlib import Path
 
 from ..models import UsageEvent, make_dedup_key
-from ..normalize import local_date, norm_model, parse_iso, to_utc_iso
+from ..normalize import local_date, norm_model, normalize_output, parse_iso, to_utc_iso
 
 SOURCE = "codex"
 HARNESS = "codex"
-DEDUP_VERSION = 2  # 2 = 文件名 + 行号（1 = 完整路径 + 行号，已废弃）
+# 3 = output_tokens 归一为「含推理」（此前存的是纯文本输出，总量与成本双算推理）
+DEDUP_VERSION = 3
 
 _FIELDS = (
     "input_tokens",
@@ -41,6 +42,7 @@ _FIELDS = (
     "output_tokens",
     "reasoning_output_tokens",
     "cache_write_input_tokens",
+    "total_tokens",
 )
 
 
@@ -147,10 +149,19 @@ def scan(store, cfg: dict, pricing, tz) -> dict:
             if inp + cr + cw + o + rr <= 0:
                 continue
 
+            # OpenAI 口径的 output 已含推理；gemini 等第三方会在 total 里另加一份。
+            # 统一归一成「含推理的输出」，下游 _TOKENS / pricing 直接相加即可。
+            # 注意 total_tokens 的口径是 input（含缓存）+ output，所以 prompt 取 delta[0]。
+            out = normalize_output(o, rr, delta[5], delta[0])
+
             dt = parse_iso(ts_raw)
-            ts = to_utc_iso(dt) if dt else (ts_raw or "")
+            if dt is None:
+                # 没有时间戳的事件无法进入日报/KPI/热力图，入库只会让各区块对不上账
+                stats["errors"] += 1
+                continue
+            ts = to_utc_iso(dt)
             model = norm_model(model_raw)
-            cost = pricing.cost(model, inp, cr, cw, o, rr)
+            cost = pricing.cost(model, inp, cr, cw, out)
             events.append(
                 UsageEvent(
                     source=SOURCE,
@@ -162,7 +173,7 @@ def scan(store, cfg: dict, pricing, tz) -> dict:
                     input_tokens=inp,
                     cache_read_tokens=cr,
                     cache_write_tokens=cw,
-                    output_tokens=o,
+                    output_tokens=out,
                     reasoning_tokens=rr,
                     cost_usd=cost,
                     session_id=sid,

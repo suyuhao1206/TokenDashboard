@@ -21,11 +21,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..models import UsageEvent, make_dedup_key
-from ..normalize import local_date, norm_model, to_utc_iso
+from ..normalize import local_date, norm_model, normalize_output, to_utc_iso
 
 SOURCE = "workbuddy"
 HARNESS = "workbuddy"
-DEDUP_VERSION = 2  # 2 = 会话 id + messageId（1 = 文件路径 + messageId，已废弃）
+# 3 = output_tokens 归一为「含推理」（此前存的是纯文本输出，总量与成本双算推理）
+DEDUP_VERSION = 3
 
 
 def _ms_to_dt(ms):
@@ -107,11 +108,24 @@ def scan(store, cfg: dict, pricing, tz) -> dict:
                 if inp + cr + out + reasoning <= 0:
                     continue
 
+                # 同 Codex：OpenAI/gemini 有的把推理算在 output 里，有的单独加。
+                # 用 totalTokens 判定，统一成「含推理的输出」。
+                total_raw = src.get("totalTokens") or src.get("total_tokens")
+                try:
+                    total_raw = int(total_raw) if total_raw is not None else None
+                except (TypeError, ValueError):
+                    total_raw = None
+                out_norm = normalize_output(out, reasoning, total_raw, total_in)
+
                 dt = _ms_to_dt(obj.get("timestamp"))
-                ts = to_utc_iso(dt) if dt else ""
+                if dt is None:
+                    # 无时间戳的事件进不了任何按天统计，直接跳过并计入 errors
+                    stats["errors"] += 1
+                    continue
+                ts = to_utc_iso(dt)
                 raw_model = pd.get("requestModelName") or pd.get("model")
                 model = norm_model(raw_model)
-                cost = pricing.cost(model, inp, cr, 0, out, reasoning)
+                cost = pricing.cost(model, inp, cr, 0, out_norm)
                 events.append(
                     UsageEvent(
                         source=SOURCE,
@@ -124,7 +138,7 @@ def scan(store, cfg: dict, pricing, tz) -> dict:
                         input_tokens=inp,
                         cache_read_tokens=cr,
                         cache_write_tokens=0,
-                        output_tokens=out,
+                        output_tokens=out_norm,
                         reasoning_tokens=reasoning,
                         cost_usd=cost,
                         session_id=obj.get("sessionId") or f.stem,
