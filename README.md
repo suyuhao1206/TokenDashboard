@@ -19,6 +19,22 @@
 未签名软件首次会被 SmartScreen 拦一次：点「更多信息」→「仍要运行」——这是未签名
 PyInstaller exe 的必然提示，不是 bug。
 
+### 系统要求
+
+| 项 | 要求 |
+|---|---|
+| 操作系统 | **64 位 Windows 10 1809（build 17763）及以上**，或 Windows 11 |
+| 运行时 | 浮窗需要 **Microsoft Edge WebView2**（Win11 与新版 Win10 自带；缺失时程序会弹窗给下载链接） |
+| 命令行 | `scan` / `report` / `serve` / `update-pricing` **不需要** WebView2，老系统上也能跑 |
+
+**不支持 Windows 7 / 8 / 8.1**：WebView2 运行时已停止支持这些系统，浮窗无法显示。
+程序启动时会先检查系统版本与 WebView2，不满足时弹中文提示并写进 `data/widget.log`，
+不会出现「双击没反应、也不知道为什么」。
+
+两个 exe 的清单（manifest）已声明：Windows 10/11 兼容、**PerMonitorV2 高 DPI 感知**
+（125%/150% 缩放下界面清晰不糊）、长路径支持、UTF-8 代码页、`asInvoker`（不请求管理员权限）。
+PE 头的子系统版本也写成了 10.0，不再对外声明「支持 Vista」。
+
 ## 为什么要做
 
 1. **调用渠道分散**：官方 API、中转站、聚合平台各看各的后台，看不到总账；同一个 harness 还会在不同渠道间来回切换（实测：Claude Code 7 月 4 日走的是 DeepSeek 模型，7 月下旬走 Anthropic 模型）。

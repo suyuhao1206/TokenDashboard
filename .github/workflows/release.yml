@@ -41,19 +41,30 @@ jobs:
       - name: 构建 TokenDashboard.exe
         run: uv run pyinstaller --noconfirm --clean TokenDashboard.spec
 
+      - name: Windows 适配（PE 子系统版本 6.0 → 10.0）
+        run: uv run python packaging/patch_subsystem.py 10.0 dist\TokenWidget.exe dist\TokenDashboard.exe
+
+      - name: 构建产物校验（x64 / PerMonitorV2 DPI / 长路径 / 版本资源）
+        run: uv run python packaging/check_exe.py dist\TokenWidget.exe dist\TokenDashboard.exe
+
       - name: 冒烟测试（进程能起、空库不崩、版本号对得上）
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          .\dist\TokenDashboard.exe --version
-          .\dist\TokenDashboard.exe --help
-          .\dist\TokenDashboard.exe report
+          uv run python packaging/smoke.py dist\TokenDashboard.exe
           if ("${{ github.ref_name }}".StartsWith("v")) {
             $out = .\dist\TokenDashboard.exe --version
             if ($out -notmatch [regex]::Escape("${{ github.ref_name }}".TrimStart("v"))) {
               throw "版本号没注入成功：$out"
             }
           }
+
+      - name: 系统兼容性说明
+        shell: pwsh
+        run: |
+          Write-Host "构建于：$([System.Environment]::OSVersion.VersionString)"
+          Write-Host "支持范围：Windows 10 1809 (build 17763) 及以上 / x64"
+          Write-Host "（Windows 7/8/8.1 不在支持范围：WebView2 运行时已停止支持这些系统）"
 
       - name: 打 zip（白名单：只收两个 exe + 快速上手）
         shell: pwsh
@@ -89,6 +100,16 @@ jobs:
             1. 下载下面的 zip → 解压到任意目录
             2. 双击 `TokenWidget.exe`，桌面出现浮窗即成功
             3. 浏览器打开 http://127.0.0.1:8787 看完整面板
+
+            ### 系统要求
+
+            | 项 | 要求 |
+            |---|---|
+            | 操作系统 | **64 位 Windows 10 1809（build 17763）及以上**，或 Windows 11 |
+            | 运行时 | 浮窗需要 WebView2（Win11 / 新版 Win10 自带；缺失会弹窗提示下载） |
+
+            - ❌ **不支持 Windows 7 / 8 / 8.1**：WebView2 已停止支持，浮窗无法显示
+            - ✅ 命令行 `scan` / `report` 不依赖 WebView2，老系统仍可用
 
             > 未签名软件会被 SmartScreen 拦一次：点「更多信息」→「仍要运行」。
             > 默认已开启开机自启，右键浮窗可一键关闭。

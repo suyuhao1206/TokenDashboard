@@ -1,4 +1,4 @@
-# 打包两个 exe：TokenWidget.exe（无控制台小组件）与 TokenDashboard.exe（命令行/面板）
+﻿# 打包两个 exe：TokenWidget.exe（无控制台小组件）与 TokenDashboard.exe（命令行/面板）
 # 用法：pwsh -File build_exe.ps1              （需要 uv，首次会下载 PyInstaller）
 #       pwsh -File build_exe.ps1 -Version v0.2.0   （同时注入版本号，与 CI 行为一致）
 #
@@ -7,6 +7,10 @@
 #   而且 `import webview` 写在 run_widget() 内部（延迟导入），PyInstaller 的静态分析
 #   看不见它。用命令行参数构建时这些全都会漏掉——打出来的 exe 双击后 ImportError。
 #   这些配置只能写在 spec 里，所以两个目标各自用对应的 spec 文件构建。
+#
+# 构建后必做两步（见「Windows 适配」注释）：
+#   1. patch_subsystem.py 10.0   —— PE 头声明最低 Win10
+#   2. check_exe.py              —— 校验 x64 / DPI 感知 / 版本资源
 param(
     [string]$Version = ""
 )
@@ -26,10 +30,18 @@ uv run pyinstaller --noconfirm --clean TokenWidget.spec
 Write-Host '== 构建 TokenDashboard.exe（控制台：scan/report/serve） =='
 uv run pyinstaller --noconfirm --clean TokenDashboard.spec
 
+Write-Host '== Windows 适配：PE 子系统版本 6.0 -> 10.0 =='
+uv run python packaging/patch_subsystem.py 10.0 dist\TokenWidget.exe dist\TokenDashboard.exe
+
+Write-Host '== 构建产物校验（x64 / DPI / 长路径 / 版本资源） =='
+uv run python packaging/check_exe.py dist\TokenWidget.exe dist\TokenDashboard.exe
+if ($LASTEXITCODE -ne 0) {
+    throw '构建产物校验未通过，见上面的报错'
+}
+
 Write-Host ''
 Write-Host '== 冒烟测试 =='
-uv run python -c "import subprocess,sys; out=subprocess.run(['dist/TokenDashboard.exe','--version'],capture_output=True,text=True); print(out.stdout.strip()); sys.exit(out.returncode)"
-uv run python -c "import subprocess,sys; out=subprocess.run(['dist/TokenDashboard.exe','report'],capture_output=True,text=True); print(out.stdout.strip()[:400]); sys.exit(out.returncode)"
+uv run python packaging/smoke.py dist\TokenDashboard.exe
 
 Write-Host ''
 Write-Host '完成：dist\TokenWidget.exe 与 dist\TokenDashboard.exe'

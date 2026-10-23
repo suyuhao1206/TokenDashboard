@@ -1,6 +1,6 @@
 [project]
 name = "token-dashboard"
-version = "0.1.0"
+version = "0.1.1"
 description = "多渠道 × 多 Harness 的本地 Token 用量聚合面板"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -3,6 +3,14 @@
 2. 浏览器打开 http://127.0.0.1:8787 看完整面板。
 3. 默认已开启开机自启；关闭：右键浮窗 → 取消勾选「开机自启」。
 
+系统要求（重要）
+- 64 位 Windows 10 1809（build 17763）及以上 / Windows 11
+- 不支持 Windows 7 / 8 / 8.1 及更老的 Win10：桌面浮窗依赖的
+  Microsoft Edge WebView2 运行时已停止支持这些系统
+- 浮窗需要 WebView2 运行时（Win11 与新版 Win10 自带；缺失时程序会弹窗提示，
+  也可手动装：https://go.microsoft.com/fwlink/p/?LinkId=2124703）
+- 命令行 scan / report 不依赖 WebView2，老系统上仍可用
+
 其他
 - 数据全部留在本机：本目录下的 data\usage.db，不上传任何内容。
 - 命令行：TokenDashboard.exe scan / report / serve / update-pricing / --version

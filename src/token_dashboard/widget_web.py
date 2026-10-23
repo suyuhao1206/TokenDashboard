@@ -556,6 +556,20 @@ def _install_excepthooks(log) -> None:
     )
 
 
+def _show_fatal(msg: str) -> None:
+    """无控制台进程里唯一能让人看见错误的办法：弹个系统消息框。
+
+    exe 是 console=False，双击后如果直接 return，用户只会看到「什么都没发生」。
+    这里用 user32.MessageBoxW（不拉 tkinter，省一次启动开销）。
+    """
+    try:
+        ctypes.windll.user32.MessageBoxW(
+            None, msg, "Token Dashboard", 0x10  # MB_ICONERROR
+        )
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
@@ -572,6 +586,18 @@ def run_widget(cfg: dict | None = None, **kwargs) -> int:
             print(f"[widget] {msg}", flush=True)
         except Exception:
             pass  # console=False 时 stdout 为 None
+
+    # 系统适配：先查操作系统版本与 WebView2 运行时。
+    # 这两项不满足时 pywebview 的报错是 HRESULT / ImportError，用户根本读不懂；
+    # 提前拦下来给中文指引，并写进 widget.log。
+    from .syscheck import check_gui_ready, os_label
+
+    say(f"运行环境：{os_label()}")
+    problem = check_gui_ready()
+    if problem:
+        say("环境检查未通过：\n" + problem)
+        _show_fatal(problem)
+        return 3
 
     state = load_widget_state()
     wcfg = {**WIDGET_DEFAULTS, **(cfg.get("widget") or {})}

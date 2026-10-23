@@ -45,6 +45,6 @@ Thumbs.db
 
 
 # 发版中间产物（CI / 本地打包时生成）
-packaging/version_info.txt
+packaging/version_info*.txt
 stage/
 TokenDashboard-*.zip

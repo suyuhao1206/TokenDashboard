@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from . import __version__
 from .config import ROOT, load_config
@@ -130,6 +131,61 @@ def cmd_widget(args) -> int:
     return run_widget(cfg, debug=args.debug, tray=not args.no_tray, log_path=args.log)
 
 
+def cmd_doctor(args) -> int:
+    """环境自检：系统版本 / WebView2 / 数据库 / 采集路径。
+
+    换机器或「双击没反应」时第一个该跑的命令。所有检查都只读，不改任何东西。
+    """
+    from .syscheck import check_webview2, check_windows, os_label, webview2_installed
+
+    cfg = load_config(args.config)
+    print(f"操作系统   : {os_label()}")
+    print(f"Python     : {sys.version.split()[0]} ({'64 位' if sys.maxsize > 2**32 else '32 位'})")
+    print(f"运行方式   : {'打包 exe' if getattr(sys, 'frozen', False) else '源码'}")
+
+    problems: list[str] = []
+    win_problem = check_windows()
+    print(f"系统版本   : {'通过' if not win_problem else '不满足'}")
+    if win_problem:
+        problems.append(win_problem)
+
+    has_wv = webview2_installed()
+    print(f"WebView2   : {'已安装' if has_wv else '未安装（只影响浮窗）'}")
+    if not has_wv:
+        wv = check_webview2()
+        if wv:
+            problems.append(wv)
+
+    db = cfg["storage"]["db_path"]
+    db_ok = Path(db).exists()
+    print(f"数据库     : {db} ({'存在' if db_ok else '不存在，先跑 scan'})")
+
+    enabled = [
+        name
+        for name, c in (cfg.get("collectors") or {}).items()
+        if isinstance(c, dict) and c.get("enabled", True)
+    ]
+    print(f"启用的采集器: {', '.join(enabled) if enabled else '（无）'}")
+    for name in enabled:
+        c = cfg["collectors"][name]
+        for key in ("paths", "db_path"):
+            val = c.get(key)
+            if not val:
+                continue
+            vals = val if isinstance(val, list) else [val]
+            for v in vals:
+                ok = Path(v).exists()
+                print(f"  {name:12s} {key}={v} {'✓' if ok else '✗ 不存在'}")
+
+    if problems:
+        print("\n需要处理：")
+        for p in problems:
+            print("  - " + p.replace("\n", "\n    "))
+        return 1
+    print("\n环境检查通过。")
+    return 0
+
+
 def _utf8_console() -> None:
     """把 stdout/stderr 切成 UTF-8。
 
@@ -180,6 +236,10 @@ def main(argv=None) -> int:
     p.add_argument("--log", help="日志文件（无控制台启动时排查问题用）")
     p.add_argument("--config")
     p.set_defaults(func=cmd_widget)
+
+    p = sub.add_parser("doctor", help="环境自检：系统版本 / WebView2 / 数据库 / 采集路径")
+    p.add_argument("--config")
+    p.set_defaults(func=cmd_doctor)
 
     args = ap.parse_args(argv)
     if not getattr(args, "cmd", None):

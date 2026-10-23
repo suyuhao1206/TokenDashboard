@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 INIT = ROOT / "src" / "token_dashboard" / "__init__.py"
 VERSION_INFO = ROOT / "packaging" / "version_info.txt"
+VERSION_INFO_WIDGET = ROOT / "packaging" / "version_info_widget.txt"
 
 
 def normalize(tag: str) -> str:
@@ -49,27 +50,40 @@ def write_init(version: str) -> None:
     INIT.write_text(new, encoding="utf-8")
 
 
-def write_version_info(version: str) -> None:
-    """PyInstaller 的 VSVersionInfo 文本（exe 右键属性里能看到版本）。"""
+def write_version_info(version: str, exe_name: str = 'TokenDashboard',
+                       desc: str = 'Token Dashboard - 本地 Token 用量面板',
+                       path: Path | None = None) -> None:
+    """PyInstaller 的 VSVersionInfo 文本（exe 右键属性里能看到版本与系统要求）。
+
+    两个 exe 各写一份：两个 spec 各自引用自己的文件，这样「属性 → 详细信息」
+    里的 OriginalFilename 不会都写成 TokenDashboard.exe。
+    """
+    out = path or VERSION_INFO
     parts = [int(p) for p in re.findall(r"\d+", version)[:3]]
     while len(parts) < 3:
         parts.append(0)
     a, b, c = parts
-    VERSION_INFO.write_text(
+    out.write_text(
         f"""# 由 packaging/bump_version.py 生成，请勿手改
 VSVersionInfo(
   ffi=FixedFileInfo(
     filevers=({a}, {b}, {c}, 0),
     prodvers=({a}, {b}, {c}, 0),
+    # OS=0x40004 (VOS__WINDOWS32) + fileType=0x1 (VFT_APP)：
+    # 「属性 → 详细信息」里显示为 Windows 应用，而不是「MS-DOS 程序」。
     mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)
   ),
   kids=[
     StringFileInfo([
       StringTable('080404B0', [
-        StringStruct('FileDescription', 'Token Dashboard'),
+        StringStruct('FileDescription', '{desc}'),
         StringStruct('FileVersion', '{version}'),
         StringStruct('ProductName', 'Token Dashboard'),
         StringStruct('ProductVersion', '{version}'),
+        StringStruct('InternalName', '{exe_name}'),
+        StringStruct('OriginalFilename', '{exe_name}.exe'),
+        # 系统要求写在 exe 属性里，用户拿到 zip 不用翻 README 就能看到
+        StringStruct('Comments', '需要 Windows 10 1809 (build 17763) 或更高版本，64 位；桌面浮窗需要 WebView2 运行时'),
         StringStruct('LegalCopyright', '')
       ])
     ]),
@@ -96,8 +110,11 @@ def main(argv: list[str]) -> int:
     version = normalize(argv[1])
     write_pyproject(version)
     write_init(version)
-    write_version_info(version)
-    print(f"版本号已更新为 {version}（pyproject.toml / __init__.py / version_info.txt）")
+    write_version_info(version, "TokenDashboard", "Token Dashboard - 本地 Token 用量面板")
+    write_version_info(
+        version, "TokenWidget", "Token Dashboard - 桌面浮窗", VERSION_INFO_WIDGET
+    )
+    print(f"版本号已更新为 {version}（pyproject.toml / __init__.py / version_info*.txt）")
     return 0
 
 

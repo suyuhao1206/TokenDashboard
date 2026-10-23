@@ -31,6 +31,11 @@ hiddenimports = (
 _version_file = Path('packaging/version_info.txt')
 _version = str(_version_file) if _version_file.exists() else None
 
+# 自定义清单：声明支持到 Windows 10/11、PerMonitorV2 DPI 感知、长路径、UTF-8 代码页。
+# PyInstaller 默认清单没有 dpiAware，125%/150% 缩放下整个窗口会被位图拉伸、字发虚。
+_manifest = Path('packaging/app.manifest')
+_manifest_arg = str(_manifest) if _manifest.exists() else None
+
 
 a = Analysis(
     ['packaging/entry_cli.py'],
@@ -67,4 +72,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     version=_version,
+    manifest=_manifest_arg,
 )
