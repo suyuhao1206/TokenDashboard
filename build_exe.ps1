@@ -19,9 +19,13 @@ Set-Location $PSScriptRoot
 
 uv sync
 
+# 不传 -Version 也要生成 version_info*.txt：它们不进 Git 仓库，而 check_exe.py
+# 要求 exe 必须带版本资源。脚本会读 __init__.py 的当前版本号（与 CI 手动触发同款兜底）。
+Write-Host '== 注入版本号 =='
 if ($Version) {
-    Write-Host "== 注入版本号 $Version =="
     uv run python packaging/bump_version.py $Version
+} else {
+    uv run python packaging/bump_version.py
 }
 
 Write-Host '== 构建 TokenWidget.exe（无控制台） =='

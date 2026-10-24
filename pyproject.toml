@@ -1,6 +1,6 @@
 [project]
 name = "token-dashboard"
-version = "0.1.1"
+version = "0.2.0"
 description = "多渠道 × 多 Harness 的本地 Token 用量聚合面板"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,5 +27,27 @@ packages = ["src/token_dashboard"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pyinstaller>=6.22.3",
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# 保持默认规则集（E/F），不额外开启一堆规则：C2 只要求拦住未使用导入 / 明显笔误
+select = ["E", "F"]
+# E501（行太长）不当作错误：中文注释按字符数算会误报，且不影响可读性
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F401"]

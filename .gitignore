@@ -39,6 +39,11 @@ tmp???????/
 # Node（如后续引入前端构建）
 node_modules/
 
+# pytest 临时目录（Windows 下偶尔残留在仓库根）
+pytest-of-*/
+.pytest_cache/
+.ruff_cache/
+
 # 杂项
 .DS_Store
 Thumbs.db

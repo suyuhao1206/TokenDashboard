@@ -24,7 +24,10 @@ from ..normalize import local_date, norm_model, to_utc_iso
 
 SOURCE = "dsh"
 HARNESS = "dsh"
-DEDUP_VERSION = 2  # 2 = 会话 id + seq（1 = 文件路径 + seq，已废弃）
+# 3 = decode_project 修正盘符冒号与带连字符目录名的还原（2 = 会话 id + seq）。
+# 算法升级必须升版本号：旧记录的 project 字段是错误路径，不清空重采的话
+# 「项目分布 Top 10」里同一个项目会一直以两个名字存在。
+DEDUP_VERSION = 3
 
 
 def _ms_to_dt(ms):
@@ -37,11 +40,39 @@ def _ms_to_dt(ms):
 def decode_project(name: str) -> str:
     """把 DSH 的目录编码还原成路径：`--D-code-~5947~601D~5999~60F3--` → `D:\\code\\奇思妙想`。
 
-    `~XXXX` 是 UTF-16 码元的十六进制；`-` 表示路径分隔符（含真实短横线时会有偏差）。
+    `~XXXX` 是 UTF-16 码元的十六进制；`-` 既是路径分隔符也可能出现在真实目录名里
+    （如 token-dashboard），没法从编码本身区分。策略：
+    1. 首段是单个字母时按 Windows 盘符处理，补回被吞掉的 `:`（否则 `D:` 丢失冒号）；
+    2. 逐段向下拼接时优先尝试「把后续多段用 `-` 合并」，合并后的目录在本机磁盘上
+       真实存在就采纳——这样 token-dashboard 不会被拆成 token\\dashboard；
+    3. 磁盘上找不到时按单段回退（老行为，目录被删/换机器时仍能给出最接近的路径）。
     """
     s = name.strip("-")
     s = re.sub(r"~([0-9A-Fa-f]{4})", lambda m: chr(int(m.group(1), 16)), s)
-    return s.replace("-", "\\")
+    parts = [p for p in s.split("-") if p]
+    if not parts:
+        return name
+    if len(parts[0]) == 1 and parts[0].isalpha():
+        cur = Path(parts[0] + ":\\")   # 盘符段：编码时 `D:` 的冒号被替换成了 `-`
+    else:
+        cur = Path(parts[0])
+    idx = 1
+    while idx < len(parts):
+        matched = None
+        for end in range(len(parts), idx, -1):   # 优先最长的合并（贪心）
+            candidate = cur / "-".join(parts[idx:end])
+            try:
+                if candidate.exists():
+                    matched = (candidate, end)
+                    break
+            except OSError:
+                pass
+        if matched:
+            cur, idx = matched
+        else:
+            cur = cur / parts[idx]
+            idx += 1
+    return str(cur)
 
 
 def scan(store, cfg: dict, pricing, tz) -> dict:

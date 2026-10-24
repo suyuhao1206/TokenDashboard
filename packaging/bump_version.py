@@ -1,14 +1,18 @@
 """版本号单一来源注入。
 
-用法：python packaging/bump_version.py v0.2.0
+用法：python packaging/bump_version.py v0.2.0   # 显式指定版本号
+      python packaging/bump_version.py          # 用 __init__.py 里的当前版本号
 
-把 tag 里的版本号同步写进两处：
+把版本号同步写进两处：
 1. pyproject.toml 的 `version = "..."`
 2. src/token_dashboard/__init__.py 的 `__version__ = "..."`
 
 顺带生成 packaging/version_info.txt，供 PyInstaller 写进 exe 文件属性
-（TokenDashboard.spec / TokenWidget.spec 里用 version= 引入；文件不存在时
-spec 会自动跳过，所以本地不跑这个脚本也能构建）。
+（TokenDashboard.spec / TokenWidget.spec 里用 version= 引入）。
+不带参数运行也很重要：check_exe.py 要求 exe 里必须有版本资源，而
+version_info*.txt 在 .gitignore 里不进仓库——CI 手动触发（workflow_dispatch）
+或全新 clone 后直接跑 build_exe.ps1 时都没有 tag 可传，这时只有靠
+「读 __init__.py 当前版本号」来生成版本资源文件，否则 PyInstaller 构建必败。
 """
 
 from __future__ import annotations
@@ -95,6 +99,14 @@ VSVersionInfo(
     )
 
 
+def current_version() -> str:
+    """不传参数时的兜底：读 __init__.py 里的当前版本号。"""
+    m = re.search(r'(?m)^__version__\s*=\s*"([^"]+)"', INIT.read_text(encoding="utf-8"))
+    if not m:
+        raise SystemExit("__init__.py 里找不到 __version__ = \"...\"，无法确定当前版本号")
+    return m.group(1)
+
+
 def main(argv: list[str]) -> int:
     # CI（windows-latest / GitHub Actions）的控制台是 cp1252，中文 print 会
     # UnicodeEncodeError 直接把整个发版流水线打断。所有输出统一转 UTF-8。
@@ -104,17 +116,17 @@ def main(argv: list[str]) -> int:
     except (AttributeError, OSError):
         pass
 
-    if len(argv) != 2:
+    if len(argv) > 2:
         print(__doc__)
         return 2
-    version = normalize(argv[1])
+    version = normalize(argv[1]) if len(argv) == 2 else current_version()
     write_pyproject(version)
     write_init(version)
     write_version_info(version, "TokenDashboard", "Token Dashboard - 本地 Token 用量面板")
     write_version_info(
         version, "TokenWidget", "Token Dashboard - 桌面浮窗", VERSION_INFO_WIDGET
     )
-    print(f"版本号已更新为 {version}（pyproject.toml / __init__.py / version_info*.txt）")
+    print(f"版本号已同步为 {version}（pyproject.toml / __init__.py / version_info*.txt）")
     return 0
 
 

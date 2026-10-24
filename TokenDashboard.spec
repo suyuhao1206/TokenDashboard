@@ -64,7 +64,9 @@ exe = EXE(
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir='.',
+    # None = 用系统标准 %TEMP%：'.' 会在 exe 目录解压出 _MEIxxxxxx 垃圾目录
+    # （强杀进程/关机时残留），且软件放在中文路径时 _MEIPASS 也含中文。
+    runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,

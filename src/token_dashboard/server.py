@@ -7,17 +7,29 @@ import io
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .config import resource_dir, ui_timezone
-from .db import Store
+from .config import DEFAULT_CONFIG, ROOT, resource_dir, save_budget, ui_timezone
+from .db import EXPORT_LIMIT, Store
+from .normalize import parse_iso
+from .periods import previous_period
 from .scan import run_scan, start_scanner
 
 UI_DIR = resource_dir() / "ui"
 APP_ID = "token-dashboard"
+
+# CSV 公式注入防护：Excel 会把以这些字符开头的单元格当公式执行。
+# 只处理文本列，数字列保持原样（否则会被写成文本、无法求和）。
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_text(v) -> str:
+    """文本单元格转义：以公式字符开头时前置单引号，让 Excel 按文本解析。"""
+    s = "" if v is None else str(v)
+    return "'" + s if s[:1] in _FORMULA_PREFIXES else s
 
 
 def create_app(cfg: dict, log=None) -> FastAPI:
@@ -25,7 +37,8 @@ def create_app(cfg: dict, log=None) -> FastAPI:
     scanner_cfg = cfg.get("scanner") or {}
     interval_min = int(scanner_cfg.get("interval_minutes", 3))
     budget_cfg = cfg.get("budget") or {}
-    monthly_budget = budget_cfg.get("monthly_usd")
+    # 用 dict 而不是局部变量：POST /api/config/budget 改完要立即生效（不重启）
+    budget_state = {"monthly_usd": budget_cfg.get("monthly_usd")}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -41,6 +54,7 @@ def create_app(cfg: dict, log=None) -> FastAPI:
     @app.get("/api/summary")
     def summary(
         harness: str | None = None,
+        model: str | None = None,
         since: str | None = None,
         until: str | None = None,
     ):
@@ -48,24 +62,101 @@ def create_app(cfg: dict, log=None) -> FastAPI:
         d7 = (today - timedelta(days=6)).isoformat()
         d30 = (today - timedelta(days=29)).isoformat()
         month_start = today.replace(day=1).isoformat()
-        month = store.totals(since=month_start, harness=harness)
+        # B8：环比数据源统一到后端。「今日 vs 昨日」「近 7 天 vs 前 7 天」的对比窗口
+        # 之前由前端拿浏览器本地时间自己推，与卡片主值（遵循 ui.timezone）可能跨天错位；
+        # 现在两段窗口都在这里按同一时区算好，前端只负责显示。
+        yesterday = (today - timedelta(days=1)).isoformat()
+        prev7_start = (today - timedelta(days=13)).isoformat()
+        prev7_end = (today - timedelta(days=7)).isoformat()
+        # 所有 totals 都带 model：否则选了模型后 KPI / 所选范围仍是全模型总量，
+        # 与同屏的图表、请求表对不上账。by_harness 保持全量语义（它本身就是分布）。
+        cur = store.totals(since=since, until=until, harness=harness, model=model)
+        # A1：环比窗口在后端算，前端只负责显示。两段严格等长且不重叠，
+        # 当前值与对比值都走 totals()，「较前一周期」与卡片主值因此严格同源。
+        window = previous_period(since, until, today)
+        prev = (
+            store.totals(since=window[0], until=window[1], harness=harness, model=model)
+            if window else None
+        )
         return {
-            "all": store.totals(harness=harness),
-            "range": store.totals(since=since, until=until, harness=harness),
-            "today": store.totals(since=today.isoformat(), harness=harness),
-            "last7d": store.totals(since=d7, harness=harness),
-            "last30d": store.totals(since=d30, harness=harness),
+            "all": store.totals(harness=harness, model=model),
+            "range": cur,
+            "prev_range": prev,
+            "prev_window": {"since": window[0], "until": window[1]} if window else None,
+            "today": store.totals(since=today.isoformat(), harness=harness, model=model),
+            "yesterday": store.totals(since=yesterday, until=yesterday,
+                                      harness=harness, model=model),
+            "last7d": store.totals(since=d7, harness=harness, model=model),
+            "prev7d": store.totals(since=prev7_start, until=prev7_end,
+                                   harness=harness, model=model),
+            "last30d": store.totals(since=d30, harness=harness, model=model),
             "by_harness": [dict(r) for r in store.by_harness()],
             "timezone": str(getattr(tz, "key", tz)),
-            # 预算提醒：本月 1 号至今的累计成本 + 配置的月度预算（未配置时为 null）
-            "month": month,
-            "budget": {"monthly_usd": monthly_budget},
+            # 预算提醒（B3）：本月 1 号至今的**全量**成本（不带 harness / model 筛选）。
+            # 预算是对整个账单设置的，若跟随下拉框筛选，选一个小模型就会让超支告警
+            # 凭空消失，预算 chip 与「累计成本」卡也对不上账。
+            "month": store.totals(since=month_start),
+            "budget": {"monthly_usd": budget_state["monthly_usd"]},
+            # 未定价模型清单：前端 chip 展开后给每个模型一键复制价格模板
+            "unpriced_models": [dict(r) for r in store.unpriced_models()],
         }
+
+    @app.get("/api/config")
+    def get_config():
+        """面板「设置预算」用：当前预算 + 实际写回的配置文件路径（便于排查）。"""
+        return {
+            "budget": {"monthly_usd": budget_state["monthly_usd"]},
+            "config_path": str(cfg.get("_config_path") or DEFAULT_CONFIG),
+        }
+
+    @app.post("/api/config/budget")
+    def set_budget(payload: dict = Body(...)):
+        """只改 budget.monthly_usd 一个键，写回 config/config.yaml 并更新内存。
+
+        传 null / 0 / 负数表示关闭预算提醒。返回写入后的值与配置文件路径。
+        """
+        raw = (payload or {}).get("monthly_usd")
+        value: float | None
+        if raw is None or raw == "":
+            value = None
+        else:
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="monthly_usd 必须是数字")
+            if value <= 0:
+                value = None
+            else:
+                value = round(value, 2)
+        try:
+            path = save_budget(cfg, value)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"写入配置失败：{exc}") from exc
+        budget_state["monthly_usd"] = value
+        return {"monthly_usd": value, "config_path": str(path)}
 
     @app.get("/api/version")
     def version():
         """端口身份校验用：widget 复用 8787 前先确认对方真的是本工具。"""
         return {"app": APP_ID, "version": __version__}
+
+    @app.post("/api/pricing/update")
+    def update_pricing_api():
+        """面板「未定价」面板的一键更新：下载最新 LiteLLM 价格表并全量重算成本。
+
+        与 CLI 的 `token-dashboard update-pricing` 同一套逻辑（U5）：
+        出现未定价模型时用户不必离开面板去敲命令行，点一下按钮即可闭环。
+        """
+        from .cli import _reprice
+        from .pricing import Pricing
+
+        try:
+            path = Pricing(ROOT).update_from_network()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"下载价格表失败：{exc}") from exc
+        overrides = (cfg.get("pricing") or {}).get("overrides_file")
+        priced, cleared = _reprice(store, Pricing(ROOT, overrides))
+        return {"path": path, "priced": priced, "cleared": cleared}
 
     @app.get("/api/meta")
     def meta():
@@ -80,15 +171,20 @@ def create_app(cfg: dict, log=None) -> FastAPI:
         model: str | None = None,
         since: str | None = None,
         until: str | None = None,
+        session_id: str | None = None,
     ):
         if dim == "total":
             return [
                 dict(r)
-                for r in store.daily_report(since=since, until=until, harness=harness, model=model)
+                for r in store.daily_report(
+                    since=since, until=until, harness=harness, model=model, session_id=session_id
+                )
             ]
         return [
             dict(r)
-            for r in store.daily_by(dim, since=since, until=until, harness=harness, model=model)
+            for r in store.daily_by(
+                dim, since=since, until=until, harness=harness, model=model, session_id=session_id
+            )
         ]
 
     @app.get("/api/breakdown")
@@ -142,20 +238,21 @@ def create_app(cfg: dict, log=None) -> FastAPI:
         model: str | None = None,
         since: str | None = None,
         until: str | None = None,
+        session_id: str | None = None,
         sort: str = "ts",
         order: str = "desc",
         format: str | None = None,
     ):
         if format == "csv":
             # 导出：不分页、带 UTF-8 BOM（Excel 直接双击打开不乱码）
-            rows = store.export_requests(
+            rows, truncated = store.export_requests(
                 since=since, until=until, harness=harness, model=model,
-                sort=sort, order=order,
+                sort=sort, order=order, session_id=session_id,
             )
             buf = io.StringIO()
             writer = csv.writer(buf)
             writer.writerow(
-                ["时间(UTC)", "日期", "Harness", "模型", "原始模型", "渠道", "项目",
+                ["时间(UTC)", "本地时间", "日期", "Harness", "模型", "原始模型", "渠道", "项目",
                  "输入", "缓存读", "缓存写", "输出(含推理)", "其中推理", "合计", "成本USD", "会话"]
             )
             for r in rows:
@@ -163,24 +260,45 @@ def create_app(cfg: dict, log=None) -> FastAPI:
                     (r["input_tokens"] or 0) + (r["cache_read_tokens"] or 0)
                     + (r["cache_write_tokens"] or 0) + (r["output_tokens"] or 0)
                 )
+                # 本地时间：与面板请求表显示一致（UTC 列保留，便于和原始日志对账）
+                dt = parse_iso(r["ts"])
+                local_ts = dt.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S") if dt else ""
                 writer.writerow([
-                    r["ts"], r["local_date"] or "", r["harness"] or "", r["model"] or "",
-                    r["raw_model"] or "", r["channel"] or "", r["project"] or "",
+                    _csv_text(r["ts"]), local_ts, _csv_text(r["local_date"] or ""),
+                    _csv_text(r["harness"] or ""), _csv_text(r["model"] or ""),
+                    _csv_text(r["raw_model"] or ""), _csv_text(r["channel"] or ""),
+                    _csv_text(r["project"] or ""),
                     r["input_tokens"] or 0, r["cache_read_tokens"] or 0,
                     r["cache_write_tokens"] or 0, r["output_tokens"] or 0,
                     r["reasoning_tokens"] or 0, total,
                     "" if r["cost_usd"] is None else f"{r['cost_usd']:.6f}",
-                    r["session_id"] or "",
+                    _csv_text(r["session_id"] or ""),
                 ])
             stamp = datetime.now(tz).strftime("%Y%m%d-%H%M")
+            # 文件名带上当前筛选范围，导出多份时能区分。只给了一端时用
+            # from/to 前缀，避免和末尾的时间戳日期看起来重复。
+            scope = ""
+            if since and until:
+                scope = f"-{since.replace('-', '')}-{until.replace('-', '')}"
+            elif since:
+                scope = f"-from{since.replace('-', '')}"
+            elif until:
+                scope = f"-to{until.replace('-', '')}"
+            headers = {
+                "Content-Disposition": f'attachment; filename="token-dashboard{scope}-{stamp}.csv"',
+                # 前端据此提示「已截断，请先加筛选再导出」
+                "X-Export-Limit": str(EXPORT_LIMIT),
+            }
+            if truncated:
+                headers["X-Export-Truncated"] = "1"
             return Response(
                 content=("\ufeff" + buf.getvalue()).encode("utf-8"),
                 media_type="text/csv; charset=utf-8",
-                headers={"Content-Disposition": f'attachment; filename="token-dashboard-{stamp}.csv"'},
+                headers=headers,
             )
         return store.recent_requests(
             page=page, size=size, since=since, until=until,
-            harness=harness, model=model, sort=sort, order=order,
+            harness=harness, model=model, sort=sort, order=order, session_id=session_id,
         )
 
     @app.get("/api/hourly")
@@ -191,7 +309,12 @@ def create_app(cfg: dict, log=None) -> FastAPI:
         until: str | None = None,
     ):
         # ts 存的是 UTC ISO 文本，SQL 里按 UTC 小时聚合后再平移到面板时区。
-        # 对整小时偏移的时区（如 Asia/Shanghai +8）精确；半/刻钟偏移的时区会取整。
+        # 口径说明（A7）：offset_h 用的是**当前时刻**的 UTC 偏移，因此
+        # - 固定偏移时区（Asia/Shanghai +8 等）：历史数据完全精确；
+        # - 有夏令时的时区（America/New_York 等）：跨越 DST 切换的历史小时会偏 1 小时。
+        # 要做到逐条精确，得把每个 ts 转成 datetime 再 astimezone(tz)（按事件各自
+        # 的偏移归桶），收益与成本不匹配，这里保持「按当前偏移平移」并在 README 注明。
+        # 半/刻钟偏移的时区（Asia/Kolkata +5:30）会取整到小时。
         offset_h = round((datetime.now(tz).utcoffset() or timedelta()).total_seconds() / 3600)
         buckets = [{"hour": h, "events": 0, "tokens": 0} for h in range(24)]
         for r in store.hourly(since=since, until=until, harness=harness, model=model):

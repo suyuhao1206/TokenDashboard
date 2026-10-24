@@ -77,9 +77,11 @@ function shortPath(p) {
   return parts.length <= 2 ? parts.join("/") || "-" : "…/" + parts.slice(-2).join("/");
 }
 
-/* ---------- 稳定配色：同一个 key 在任何图/徽章里颜色一致 ---------- */
-const PALETTE = ["#3b82f6", "#22c55e", "#eab308", "#f97316", "#a855f7", "#06b6d4",
-                 "#ef4444", "#84cc16", "#ec4899", "#14b8a6", "#8b5cf6", "#0ea5e9"];
+/* ---------- 稳定配色：同一个 key 在任何图/徽章里颜色一致 ----------
+   Google Cloud / Observable 12 色数据可视化和谐调色板：明度接近，
+   堆叠/并列时不会出现某一根柱子「跳出来」。 */
+const PALETTE = ["#4f8ff7", "#34d399", "#a78bfa", "#f59e0b", "#38bdf8", "#f472b6",
+                 "#6366f1", "#10b981", "#fb7185", "#2dd4bf", "#c084fc", "#f97316"];
 const colorCache = new Map();
 function colorFor(key) {
   const k = String(key === null || key === undefined ? "-" : key);
@@ -104,9 +106,13 @@ function currentTheme() {
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   const btn = document.getElementById("btnTheme");
-  // 图标 + 当前状态：避免「浅色」到底是状态还是动作的歧义，也避免初始 HTML
+  // 矢量图标 + 当前状态：避免「浅色」到底是状态还是动作的歧义，也避免初始 HTML
   // 写死「◐ 主题」导致首次加载时文案跳变（按钮内容一律由 JS 填）。
-  if (btn) btn.textContent = t === "light" ? "☀ 浅色" : "☾ 深色";
+  if (btn) {
+    const sun = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+    const moon = '<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    btn.innerHTML = (t === "light" ? sun + " 浅色" : moon + " 深色");
+  }
 }
 
 /* ---------- HTTP / 提示 ---------- */

@@ -104,11 +104,21 @@ pwsh -File build_exe.ps1 -Version v0.2.0  # 顺便注入版本号（与 CI 一�
 - 构建走 `.spec` 而不是命令行参数：`pywebview` 的 WebView2 互操作 DLL 与 `pythonnet` 运行时是
   **数据文件**，命令行的 `--collect-data` 收不全，打出来的 exe 会 ImportError
 - **发版**：`git tag v0.2.0 && git push origin v0.2.0`，`.github/workflows/release.yml`
-  自动构建、冒烟测试、打白名单 zip 并发 GitHub Release。checklist 见 `RELEASE.md`
+  自动构建、跑 ruff + pytest、冒烟测试、打白名单 zip 并发 GitHub Release。checklist 见 `RELEASE.md`
 - ⚠️ 发布 zip 只收 `TokenWidget.exe` + `TokenDashboard.exe` + `packaging/快速上手.txt`：
   `dist/data/` 里有真实用量库与日志，**不能整包发布**
 - 旧的手工自启脚本（`install-autostart.cmd` / `uninstall-autostart.cmd`）保留作备用，
   日常不需要再用——widget 自己会注册
+
+### 测试与静态检查
+
+```bash
+uv run pytest -q                     # 62 个用例，全部用临时库/临时目录，不碰真实日志
+uv run ruff check src packaging tests
+```
+
+CI 在构建 exe **之前**跑这两步：口径（推理不双算）、排序白名单、去重幂等、A1 环比窗口、
+CSV 公式注入防护、预算写回、**四档 DPI 下 fit_viewport 收敛**等都有用例兜底。
 
 ## 当前实现状态（2026-10-21）
 
@@ -121,9 +131,20 @@ pwsh -File build_exe.ps1 -Version v0.2.0  # 顺便注入版本号（与 CI 一�
 - **进程模型**：一个进程 = 内嵌 uvicorn + 一个 WebView2 浮窗（约 130 MB）；面板是同一进程里的网页，
   不额外起服务。`cmd_serve` 与 `widget` 都先扫一轮再定时扫
 - **面板**：`http://127.0.0.1:8787` —— 5 张 KPI 卡（今日 / 近 7 天 / 近 30 天 / 缓存命中率 / 累计成本，含环比；
-  **有筛选时额外显示「所选范围」卡**）、工作回溯热力图（近 365 天，四分位分级）、每日趋势（按 harness / 模型堆叠）、
-  活跃时段、模型分布、项目 Top10、最近请求分页表（页大小 10/20/50/100、**点表头排序**、**按模型筛选**、**导出 CSV**）、
-  会话明细、日明细；带时间范围 / harness / 模型筛选（起止日期填反会自动互换）
+  **有筛选时额外显示「所选范围」卡，含等长的「较前一周期」环比**）、工作回溯热力图（近 365 天，四分位分级，
+  **点格子直接筛到当天**）、每日趋势（按 harness / 模型堆叠）、活跃时段、模型分布（**不受模型筛选影响，始终显示全局分布**）、
+  项目 Top10、最近请求分页表（页大小 10/20/50/100、**点表头排序**、**按模型筛选**、**导出 CSV**、**合计列 hover 看五项构成**）、
+  会话明细（**点行展开该会话按天明细，可一键筛到请求表**）、日明细；带时间范围 / harness / 模型筛选（起止日期填反会自动互换）
+- **快捷键**：`R` 手动刷新、`1/2/3/4` 切 今天/近 7 天/近 30 天/全部、`Esc` 清除筛选（在输入框里打字不会被截获）。
+  状态条上的「更新于 …」可点击，只重新拉数据不触发扫描
+- **预算可在线改**：状态条「未设预算」chip 点击即可填月度预算，写回 `config/config.yaml` 并立即生效（无需重启）；
+  未定价模型 chip 展开后每个模型都有「复制价格模板」按钮，粘贴到 `config/pricing.overrides.yaml` 填价再
+  `update-pricing` 即可
+- **空库引导**：没有任何数据时 hero 区出现三步引导卡（scan / 扫描按钮 / 设预算）+ 「立即扫描」
+- **导出 CSV**：带「本地时间」列（与面板显示一致）+ UTC 列；文本列做了 Excel 公式注入转义（`=` `+` `-` `@` 前置 `'`）；
+  单次最多 20 万行，超出时响应头 `X-Export-Truncated: 1` 且面板提示「先加筛选再导出」；文件名带筛选范围
+- **活跃时段口径**：按「当前时刻的 UTC 偏移」把历史小时平移到面板时区。对 `Asia/Shanghai` 这类**固定偏移时区精确**；
+  有夏令时的时区（如 `America/New_York`）跨 DST 切换的历史小时会偏 1 小时——按事件逐条换算成本远高于收益，暂不处理
 - **数据自己保持新鲜**：`serve` / `widget` 启动时先扫一轮，之后每 3 分钟（`scanner.interval_minutes`）
   后台扫描一次；面板每 30 秒静默轮询（标签页切走就暂停），**轮询不碰筛选条件、不重置请求表页码**
 - **渠道视图（M3 起步）**：只读接入 cc-switch，把渠道汇总写入独立表并以独立面板区块呈现（**不与 harness 总量合并**，避免重复计数）。

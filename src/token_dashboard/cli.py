@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import unicodedata
 from pathlib import Path
 
 from . import __version__
@@ -36,6 +37,78 @@ def cmd_scan(args) -> int:
     return 0
 
 
+# 报表列宽：表头与数据行共用同一组常量。以前表头写死 `>14` / `>11`、
+# 数据行写 `>12` / `>9`，两列各错位 2 个字符；共用常量杜绝再错位。
+# 宽度是「终端显示宽度」而不是字符数——中文表头一个字占两列，用 len() 补空格
+# 看起来还是歪的，所以统一走 _pad()。
+REPORT_WIDTHS = (12, 13, 15, 13, 14, 11, 15, 10, 7)
+REPORT_HEADERS = ("日期", "输入", "缓存读", "缓存写", "输出含推理",
+                  "其中推理", "合计", "成本USD", "未定价")
+
+
+def _disp_width(text: str) -> int:
+    """终端显示宽度：东亚宽字符（中文/全角符号）按 2 列计。"""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+
+
+def _pad(text: str, width: int, align: str = ">") -> str:
+    pad = " " * max(0, width - _disp_width(text))
+    return pad + text if align == ">" else text + pad
+
+
+def _report_header(widths=REPORT_WIDTHS) -> str:
+    """表头对齐数据行：首列左对齐，其余右对齐（同 widths）。"""
+    cells = [_pad(REPORT_HEADERS[0], widths[0], "<")]
+    cells += [
+        _pad(h, w) for h, w in zip(REPORT_HEADERS[1:], widths[1:], strict=True)
+    ]
+    # 中文表头占 2 列宽，按 widths 补齐后显示宽度就一致了；
+    # 「输出含推理」这种 5 字标签需要 10 列，14 列的宽度够用。
+    return "".join(cells)
+
+
+def _report_cells(r) -> list[str]:
+    """把一行数据格式化成与表头同序的字符串列表。"""
+    # 注意：output_tokens 已含推理（对齐 OpenAI 口径），这里不能再加 reasoning_tokens
+    total = sum(
+        r[k] or 0
+        for k in (
+            "input_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "output_tokens",
+        )
+    )
+    cost = r["cost_usd"]
+    return [
+        r["date"],
+        f"{r['input_tokens'] or 0:,}",
+        f"{r['cache_read_tokens'] or 0:,}",
+        f"{r['cache_write_tokens'] or 0:,}",
+        f"{r['output_tokens'] or 0:,}",
+        f"{r['reasoning_tokens'] or 0:,}",
+        f"{total:,}",
+        f"{cost:.4f}" if cost is not None else "-",
+        str(r["unpriced"] or 0),
+    ]
+
+
+def _column_widths(rows) -> tuple[int, ...]:
+    """列宽 = max(表头显示宽度, 所有数据的显示宽度)，且不小于 REPORT_WIDTHS。
+
+    A4 的核心是「表头和数据行用同一组宽度」。这里再往前一步：宽度按内容自适应，
+    这样即使某天 tokens 超过 10 亿（13 位数字 > 12 列宽），也不会串到相邻列。
+    REPORT_WIDTHS 作为下限，保证正常数据下列宽稳定、不随内容忽宽忽窄。
+    """
+    widths = list(REPORT_WIDTHS)
+    for i, h in enumerate(REPORT_HEADERS):
+        widths[i] = max(widths[i], _disp_width(h))
+    for r in rows:
+        for i, cell in enumerate(_report_cells(r)):
+            widths[i] = max(widths[i], _disp_width(cell))
+    return tuple(widths)
+
+
 def cmd_report(args) -> int:
     cfg = load_config(args.config)
     store = Store(cfg["storage"]["db_path"])
@@ -46,27 +119,13 @@ def cmd_report(args) -> int:
     if not rows:
         print("暂无数据。先运行：token-dashboard scan")
         return 0
-    print(
-        f"{'日期':<12}{'输入':>13}{'缓存读':>15}{'缓存写':>13}{'输出含推理':>14}{'其中推理':>11}{'合计':>15}{'成本USD':>10}{'未定价':>7}"
-    )
+    widths = _column_widths(rows)
+    print(_report_header(widths))
     for r in rows:
-        # 注意：output_tokens 已含推理（对齐 OpenAI 口径），这里不能再加 reasoning_tokens
-        total = sum(
-            r[k] or 0
-            for k in (
-                "input_tokens",
-                "cache_read_tokens",
-                "cache_write_tokens",
-                "output_tokens",
-            )
-        )
-        cost = r["cost_usd"]
-        cost_s = f"{cost:.4f}" if cost is not None else "-"
-        print(
-            f"{r['date']:<12}{r['input_tokens'] or 0:>13,}{r['cache_read_tokens'] or 0:>15,}"
-            f"{r['cache_write_tokens'] or 0:>13,}{r['output_tokens'] or 0:>12,}"
-            f"{r['reasoning_tokens'] or 0:>9,}{total:>15,}{cost_s:>10}{r['unpriced'] or 0:>7}"
-        )
+        cells = _report_cells(r)
+        line = _pad(cells[0], widths[0], "<")
+        line += "".join(_pad(c, w) for c, w in zip(cells[1:], widths[1:], strict=True))
+        print(line)
     return 0
 
 
@@ -75,32 +134,36 @@ def _reprice(store: Store, pricing: Pricing) -> tuple[int, int]:
 
     算不出成本的行必须把 cost_usd 置 NULL：否则模型从价格表消失后旧成本会残留，
     报表里「成本合计」和「未定价事件」互相矛盾。
+
+    面板线程（/api 端点）可能同时在读写同一个库：Store 的所有访问都以 _lock 串行化，
+    这里必须同样持锁——SELECT 拿快照和 UPDATE 写回都要在锁内完成。
     """
-    rows = store.conn.execute(
-        "SELECT id, model, input_tokens, cache_read_tokens, cache_write_tokens, "
-        "output_tokens, reasoning_tokens FROM usage_events"
-    ).fetchall()
-    priced = cleared = 0
-    with store.conn:
-        for r in rows:
-            c = pricing.cost(
-                r["model"],
-                r["input_tokens"],
-                r["cache_read_tokens"],
-                r["cache_write_tokens"],
-                r["output_tokens"],
-                r["reasoning_tokens"],
-            )
-            if c is not None:
-                store.conn.execute(
-                    "UPDATE usage_events SET cost_usd=? WHERE id=?", (c, r["id"])
+    with store._lock:
+        rows = store.conn.execute(
+            "SELECT id, model, input_tokens, cache_read_tokens, cache_write_tokens, "
+            "output_tokens, reasoning_tokens FROM usage_events"
+        ).fetchall()
+        priced = cleared = 0
+        with store.conn:
+            for r in rows:
+                c = pricing.cost(
+                    r["model"],
+                    r["input_tokens"],
+                    r["cache_read_tokens"],
+                    r["cache_write_tokens"],
+                    r["output_tokens"],
+                    r["reasoning_tokens"],
                 )
-                priced += 1
-            else:
-                cleared += store.conn.execute(
-                    "UPDATE usage_events SET cost_usd=NULL WHERE id=? AND cost_usd IS NOT NULL",
-                    (r["id"],),
-                ).rowcount
+                if c is not None:
+                    store.conn.execute(
+                        "UPDATE usage_events SET cost_usd=? WHERE id=?", (c, r["id"])
+                    )
+                    priced += 1
+                else:
+                    cleared += store.conn.execute(
+                        "UPDATE usage_events SET cost_usd=NULL WHERE id=? AND cost_usd IS NOT NULL",
+                        (r["id"],),
+                    ).rowcount
     return priced, cleared
 
 

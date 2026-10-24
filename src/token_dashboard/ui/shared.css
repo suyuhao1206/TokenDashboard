@@ -7,54 +7,59 @@
    ========================================================================== */
 
 :root {
-  /* ---- 深色（默认） ---- */
-  --bg: #0d1017;
-  --surface: #141824;
-  --surface2: #1a1f2e;
-  --border: #232a3a;
-  --border-strong: #2e3749;
-  --text: #e8eaf0;
-  --muted: #8b93a7;
-  --faint: #5c6478;
-  --accent: #3b82f6;
-  --green: #22c55e;
-  --amber: #eab308;
-  --red: #ef4444;
+  /* ---- 深色（Google AI Studio / Material 3 Dark 风格） ---- */
+  --bg: #0b0e14;
+  --surface: #121722;
+  --surface2: #19202e;
+  --surface-hover: #1e2638;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --text: #eef0f6;
+  --muted: #949db1;
+  --faint: #5e677d;
+  --accent: #60a5fa;
+  --accent-strong: #3b82f6;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
   --on-accent: #ffffff;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 8px 24px rgba(0, 0, 0, .18);
-  --shadow-pop: 0 12px 32px rgba(0, 0, 0, .38);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 16px 40px -8px rgba(0, 0, 0, 0.6);
   /* 热力图 5 档（由暗到亮） */
-  --hm0: #1c212b;
-  --hm1: #0e3a5c;
-  --hm2: #16639b;
-  --hm3: #2f8fdd;
-  --hm4: #6cb8ff;
+  --hm0: rgba(255, 255, 255, 0.04);
+  --hm1: #113255;
+  --hm2: #1d568f;
+  --hm3: #3182ce;
+  --hm4: #63b3ed;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --bg: #f4f6f9;
+  /* ---- 浅色（Google Cloud / Material 3 Light 风格） ---- */
+  --bg: #f6f8fc;
   --surface: #ffffff;
-  --surface2: #eef1f6;
-  --border: #e3e7ee;
-  --border-strong: #ccd4e0;
-  --text: #161b26;
-  --muted: #667085;
-  --faint: #98a2b3;
+  --surface2: #f0f4f9;
+  --surface-hover: #e9eef6;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --muted: #475569;
+  --faint: #94a3b8;
   --accent: #2563eb;
-  --green: #15803d;
-  --amber: #a16207;
+  --accent-strong: #1d4ed8;
+  --green: #059669;
+  --amber: #d97706;
   --red: #dc2626;
   --on-accent: #ffffff;
-  --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 4px 14px rgba(16, 24, 40, .06);
-  --shadow-pop: 0 12px 32px rgba(16, 24, 40, .16);
-  --hm0: #e9edf3;
-  --hm1: #c7e0f7;
-  --hm2: #8fc4ee;
-  --hm3: #4f9fe0;
-  --hm4: #1f6fb2;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -6px rgba(15, 23, 42, 0.06);
+  --shadow-pop: 0 14px 36px -6px rgba(15, 23, 42, 0.16);
+  --hm0: #edf2f7;
+  --hm1: #cbe3fb;
+  --hm2: #8ec5f6;
+  --hm3: #4299e1;
+  --hm4: #2b6cb0;
   color-scheme: light;
 }
 
@@ -64,7 +69,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 13.5px/1.55 "Inter", "Segoe UI Variable Display", "Segoe UI", -apple-system,
+        "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -128,48 +134,81 @@ select:focus-visible, input[type=date]:focus-visible {
 .card {
   position: relative;
   overflow: hidden;
-  padding: 14px 16px 13px;
+  padding: 15px 17px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  transition: transform .18s cubic-bezier(.2, 0, 0, 1), border-color .18s, box-shadow .18s;
 }
+.card:hover {
+  transform: translateY(-1.5px);
+  border-color: var(--border-strong);
+}
+/* 右上角柔和环境微光球，取代生硬的 2px 顶边横杠 */
 .card::before {
   content: "";
   position: absolute;
-  left: 0; right: 0; top: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent), transparent 72%);
+  top: -28px; right: -28px;
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 70%);
+  pointer-events: none;
 }
-.card.good::before { background: linear-gradient(90deg, var(--green), transparent 72%); }
-.card.warn::before { background: linear-gradient(90deg, var(--amber), transparent 72%); }
-.card .k { font-size: 12px; color: var(--muted); }
+.card.good::before { background: radial-gradient(circle, color-mix(in srgb, var(--green) 18%, transparent) 0%, transparent 70%); }
+.card.warn::before { background: radial-gradient(circle, color-mix(in srgb, var(--amber) 20%, transparent) 0%, transparent 70%); }
+.card.err::before  { background: radial-gradient(circle, color-mix(in srgb, var(--red) 22%, transparent) 0%, transparent 70%); }
+.card .k-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.card .k { font-size: 12px; font-weight: 500; color: var(--muted); }
+.card .k-ico {
+  width: 24px; height: 24px; border-radius: 7px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface2));
+  color: var(--accent); flex: none;
+}
+.card.good .k-ico { background: color-mix(in srgb, var(--green) 12%, var(--surface2)); color: var(--green); }
+.card.warn .k-ico { background: color-mix(in srgb, var(--amber) 14%, var(--surface2)); color: var(--amber); }
+.card.err .k-ico  { background: color-mix(in srgb, var(--red) 14%, var(--surface2)); color: var(--red); }
+.card .k-ico svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .card .v {
-  margin-top: 7px;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -.6px;
+  margin-top: 8px;
+  font-size: 29px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -.03em;
   font-variant-numeric: tabular-nums;
 }
 .card.accent .v { color: var(--accent); }
 .card.good .v { color: var(--green); }
 .card.warn .v { color: var(--amber); }
-/* 环比：这是用量统计不是股票，涨用绿、跌用红 */
+.card.err .v  { color: var(--red); }
+/* 环比：这是用量统计不是股票，涨用绿、跌用红。百分比装进胶囊里更醒目 */
 .card .d {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 5px;
+  gap: 6px;
+  margin-top: 6px;
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
+.card .d-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
 .card .d.up { color: var(--green); }
+.card .d.up .d-pill { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
 .card .d.down { color: var(--red); }
+.card .d.down .d-pill { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
 .card .d.flat { color: var(--faint); }
+.card .d.flat .d-pill { color: var(--muted); background: var(--surface2); }
 .card .d .muted { color: var(--faint); font-size: 11px; }
 .card .n {
-  margin-top: 5px;
+  margin-top: 6px;
   font-size: 11.5px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
@@ -178,6 +217,7 @@ select:focus-visible, input[type=date]:focus-visible {
   text-overflow: ellipsis;
 }
 .card .n.warnc { color: var(--amber); }
+.card .n.errc  { color: var(--red); }
 
 .panel {
   min-width: 0;
@@ -230,6 +270,11 @@ select:focus-visible, input[type=date]:focus-visible {
   background: color-mix(in srgb, var(--amber) 9%, var(--surface));
 }
 .chip.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); }
+.chip.err {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 45%, var(--border));
+  background: color-mix(in srgb, var(--red) 10%, var(--surface));
+}
 
 /* 状态条：横向排布的 chip 组，失败时右侧可出现「重试」按钮 */
 .statusbar {

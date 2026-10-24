@@ -18,25 +18,88 @@ try {
 <link rel="stylesheet" href="/static/shared.css">
 <style>
   /* 以下为面板专属布局；通用令牌与组件在 shared.css */
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 22px 40px; }
+  /* 面板专属顶部极光环境光晕 */
+  body::before {
+    content: ""; position: fixed; top: -180px; left: 50%; transform: translateX(-50%);
+    width: min(1100px, 100vw); height: 360px;
+    background: radial-gradient(ellipse at center,
+      color-mix(in srgb, var(--accent) 11%, transparent) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 24px 24px 44px; }
 
   /* ---------- 页头 ---------- */
-  .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start;
+  .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
          justify-content: space-between; }
-  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .2px; }
-  .sub { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.7;
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: grid; place-items: center; color: #fff; flex: none;
+    background: linear-gradient(135deg, var(--accent-strong, #3b82f6), #6366f1);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent),
+                0 1px 0 rgba(255, 255, 255, .25) inset;
+  }
+  .title-row { display: flex; align-items: center; gap: 9px; }
+  h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
+  .live-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 1px 8px; font-size: 11px; font-weight: 500; color: var(--green);
+    background: color-mix(in srgb, var(--green) 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--green) 28%, var(--border));
+    border-radius: 999px;
+  }
+  .live-pill i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent);
+    animation: pulse-dot 2.2s infinite;
+  }
+  @keyframes pulse-dot {
+    70% { box-shadow: 0 0 0 5px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .sub { margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.6;
          font-variant-numeric: tabular-nums; }
   .actions { display: flex; gap: 8px; align-items: center; }
+  .actions button { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .actions button svg { width: 14px; height: 14px; stroke: currentColor; fill: none;
+                        stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  #btnScan {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+    color: var(--accent);
+  }
+  #btnScan:hover { background: var(--accent-strong, var(--accent)); color: #fff; }
 
-  /* ---------- 筛选条（吸顶） ---------- */
-  .bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 10px;
-         align-items: center; margin: 14px 0; padding: 8px 12px;
-         background: var(--surface);
-         background: color-mix(in srgb, var(--surface) 88%, transparent);
-         backdrop-filter: blur(10px); border: 1px solid var(--border);
-         border-radius: var(--radius); box-shadow: var(--shadow); }
-  .bar label { display: inline-flex; align-items: center; gap: 6px;
-               font-size: 12px; color: var(--muted); }
+  /* ---------- 筛选条（Material 3 悬浮毛玻璃胶囊栏） ---------- */
+  .bar {
+    position: sticky; top: 10px; z-index: 20;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin: 16px 0; padding: 7px 10px;
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid var(--border-strong);
+    border-radius: 13px; box-shadow: var(--shadow);
+  }
+  .field-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 4px 2px 10px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 9px; font-size: 12px; color: var(--muted);
+    transition: border-color .15s;
+  }
+  .field-pill:hover, .field-pill:focus-within { border-color: var(--accent); }
+  .field-pill select, .field-pill input[type=date] {
+    border: 0; background: transparent; padding: 3px 6px;
+    font-size: 12px; font-weight: 500; color: var(--text); outline: none;
+  }
+  .field-pill .arr { color: var(--faint); font-size: 11px; padding: 0 2px; }
+  .reset-btn {
+    padding: 4px 10px; font-size: 12px; font-weight: 500;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  }
+  .reset-btn:hover { background: var(--accent); color: var(--on-accent); }
 
   /* ---------- Hero KPI ---------- */
   .hero { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -50,34 +113,14 @@ try {
   @media (max-width: 620px) {
     .hero, .hero.with-range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  .card { position: relative; overflow: hidden; padding: 14px 16px 13px;
-          background: var(--surface); border: 1px solid var(--border);
-          border-radius: var(--radius); box-shadow: var(--shadow); }
-  /* 「所选范围」卡：accent 描边，和右边 5 张固定窗口卡明确区分 */
+  /* 「所选范围」卡：accent 描边，和右边 5 张固定窗口卡明确区分（卡片本体样式在 shared.css） */
   .card.range { border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
                 background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
-  /* 顶部 2px 渐变高亮条 */
-  .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
-                  background: linear-gradient(90deg, var(--accent), transparent 72%); }
-  .card.good::before { background: linear-gradient(90deg, var(--green), transparent 72%); }
-  .card.warn::before { background: linear-gradient(90deg, var(--amber), transparent 72%); }
-  .card .k { font-size: 12px; color: var(--muted); }
-  .card .v { margin-top: 7px; font-size: 28px; font-weight: 600; line-height: 1.2;
-             letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
-  .card.accent .v { color: var(--accent); }
-  .card.good .v { color: var(--green); }
-  .card.warn .v { color: var(--amber); }
-  /* 环比：这是用量统计不是股票，涨用绿、跌用红（约定写在注释里，避免以后误改） */
-  .card .d { display: flex; align-items: center; gap: 5px; margin-top: 5px;
-             font-size: 11.5px; font-variant-numeric: tabular-nums; }
-  .card .d.up { color: var(--green); }
-  .card .d.down { color: var(--red); }
-  .card .d.flat { color: var(--faint); }
-  .card .d .muted { color: var(--faint); font-size: 11px; }
-  .card .n { margin-top: 5px; font-size: 11.5px; color: var(--faint);
-             font-variant-numeric: tabular-nums; white-space: nowrap;
-             overflow: hidden; text-overflow: ellipsis; }
-  .card .n.warnc { color: var(--amber); }
+  /* 副标题最多两行：shared.css 里是单行 nowrap，这里覆盖成可换行 + 截断，
+     否则「所选范围」卡的「条数 · 精确值 · 成本 · 对比窗口」会被截掉一半。 */
+  .card .n { white-space: normal; overflow: hidden; text-overflow: ellipsis;
+             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+             line-clamp: 2; }
 
   /* ---------- 面板 / 网格 ---------- */
   .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
@@ -138,20 +181,35 @@ try {
   .hm-cell.lv3 { background: var(--hm3); }
   .hm-cell.lv4 { background: var(--hm4); }
   .hm-cell.void { background: transparent; }
+  .hm-cell[data-d] { cursor: pointer; }
   .hm-cell[data-d]:hover { outline: 1px solid var(--text); outline-offset: 1px; }
   .hm-legend { display: flex; align-items: center; gap: 4px; margin-top: 10px;
                padding-left: 22px; font-size: 11px; color: var(--faint); }
   .hm-legend .hm-cell { flex: none; }
-  .hm-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px;
-              padding-left: 18px; border-left: 1px solid var(--border); }
-  @media (max-width: 860px) {
-    .hm-stats { padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--border); }
+  /* 热力图右侧统计：迷你 Bento 卡片（自带底色圆角，不再用竖分隔线） */
+  .hm-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .hm-stat {
+    padding: 9px 11px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
   }
   .hm-stat .k { font-size: 11.5px; color: var(--muted); }
-  .hm-stat .v { margin-top: 2px; font-size: 18px; font-weight: 600;
+  .hm-stat .v { margin-top: 2px; font-size: 18px; font-weight: 650;
                 font-variant-numeric: tabular-nums; }
   .hm-stat .n { margin-top: 1px; font-size: 11px; color: var(--faint);
                 font-variant-numeric: tabular-nums; }
+
+  /* 请求表：模型名胶囊（长名截断而不是把整列撑宽） */
+  .model-pill {
+    display: inline-block; max-width: 210px; padding: 1px 7px;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px;
+    color: var(--text); background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+  }
+  /* 缓存率微进度条：数字 + 26px 小条并排，扫一眼比纯数字直观 */
+  .rate-wrap { display: inline-flex; align-items: center; gap: 6px; }
+  .rate-bar { width: 26px; height: 5px; border-radius: 99px; background: var(--surface2); overflow: hidden; }
+  .rate-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+  .rate-bar.good i { background: var(--green); }
 
   /* ---------- 分页 ---------- */
   .pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
@@ -198,38 +256,136 @@ try {
     /* 窄屏隐藏低优先列（缓存读 / 推理 / 缓存率），表格不必横向滚动即可读 */
     .col-low { display: none; }
   }
+
+  /* ---------- B6 首次使用引导卡 ---------- */
+  .onboard {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px;
+    align-items: center; margin-bottom: 14px; padding: 14px 18px;
+    background: linear-gradient(120deg,
+      color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 62%);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .onboard[hidden] { display: none; }
+  .onboard .ob-ico { font-size: 22px; color: var(--accent); }
+  .onboard .ob-title { font-size: 13.5px; font-weight: 600; }
+  .onboard .ob-steps { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 5px;
+                        font-size: 12px; color: var(--muted); }
+  .onboard .ob-steps b { color: var(--text); font-weight: 600; }
+  @media (max-width: 620px) {
+    .onboard { grid-template-columns: auto minmax(0, 1fr); }
+    .onboard .ob-act { grid-column: 1 / -1; }
+  }
+
+  /* ---------- B2 未定价清单 ---------- */
+  .unpriced-panel {
+    flex: 1 0 100%; margin-top: 2px; padding: 10px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    /* 未定价模型可能有几十个：给个高度上限，内部滚动，别把下面的图表顶出屏幕 */
+    max-height: 320px; overflow-y: auto;
+  }
+  .unpriced-panel[hidden] { display: none; }
+  .unpriced-panel .up-head { margin-bottom: 6px; font-size: 11.5px; color: var(--muted);
+                             line-height: 1.6;
+                             /* U5：说明文字 + 「联网更新价格表」按钮左右分布 */
+                             display: flex; flex-wrap: wrap; gap: 4px 12px;
+                             align-items: center; justify-content: space-between; }
+  .unpriced-panel .up-head b { color: var(--text); }
+  .unpriced-panel .up-head button { padding: 2px 10px; font-size: 11px; flex: none; }
+  .up-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+             gap: 2px 18px; }
+  .up-row { display: flex; align-items: center; gap: 10px; font-size: 12px;
+            padding: 2px 0; }
+  .up-row .up-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                     white-space: nowrap; font-family: ui-monospace, Consolas, monospace; }
+  .up-row .up-meta { color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .up-row button { padding: 2px 9px; font-size: 11px; flex: none; }
+  button.chip { cursor: pointer; font: inherit; font-size: 11.5px; }
+  button.chip:hover { border-color: var(--accent); }
+
+  /* ---------- B10 可点击的「更新于」 ---------- */
+  .refreshable { cursor: pointer; border-bottom: 1px dashed var(--border-strong); }
+  .refreshable:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ---------- B5 会话展开 ---------- */
+  #sessions tr.sess-row { cursor: pointer; }
+  #sessions tr.sess-row .caret { display: inline-block; width: 12px; color: var(--faint);
+                                 transition: transform .15s; }
+  #sessions tr.sess-row.open .caret { transform: rotate(90deg); color: var(--accent); }
+  #sessions tr.sess-detail > td { padding: 0; background: var(--surface2); }
+  .sess-detail .sd-wrap { padding: 10px 14px 12px 28px; }
+  .sess-detail table { width: auto; min-width: 320px; }
+  .sess-detail th, .sess-detail td { padding: 3px 10px; font-size: 12px; }
+  .sess-detail .sd-foot { display: flex; gap: 12px; align-items: center; margin-top: 7px;
+                          font-size: 11.5px; color: var(--muted); }
+  .sess-detail a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .sess-detail a:hover { text-decoration: underline; }
+  .sess-detail .sd-empty { font-size: 12px; color: var(--faint); }
+
+  /* 请求表的「会话筛选」提示（从会话明细跳转过来时出现） */
+  #sessionFilter { display: inline-flex; gap: 6px; }
+  #sessionFilter[hidden] { display: none; }
+  #sessionFilter b { color: var(--text); font-weight: 600; }
+  #sessionFilter a { color: var(--accent); text-decoration: none; }
+
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div>
-      <h1>Token Dashboard</h1>
-      <div class="sub" id="sub">加载中…</div>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div>
+        <div class="title-row">
+          <h1>Token Dashboard</h1>
+          <span class="live-pill" title="后台每 3 分钟自动增量扫描 · 面板每 30 秒静默同步"><i></i>Live</span>
+        </div>
+        <div class="sub" id="sub">加载中…</div>
+      </div>
     </div>
     <div class="actions">
-      <button id="btnScan" title="扫描本地日志并入库（定时任务每 3 分钟自动跑一次）">⟳ 扫描</button>
-      <button id="btnRefresh" title="立即重新拉取数据"><span id="refreshIcon">↻</span> 刷新</button>
+      <button id="btnScan" title="扫描本地日志并入库（定时任务每 3 分钟自动跑一次）">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+        扫描日志
+      </button>
+      <button id="btnRefresh" title="立即重新拉取数据（快捷键 R）">
+        <span id="refreshIcon" style="display:inline-flex"><svg viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></span>
+        刷新
+      </button>
       <button id="btnTheme" title="切换浅色 / 深色主题"></button>
     </div>
   </header>
 
   <div class="bar" role="group" aria-label="筛选条件">
     <div class="seg" id="presets">
-      <button data-preset="7">近 7 天</button>
-      <button data-preset="30">近 30 天</button>
-      <button data-preset="all" class="on">全部</button>
+      <button data-preset="today" title="快捷键 1">今天</button>
+      <button data-preset="7" title="快捷键 2">近 7 天</button>
+      <button data-preset="30" title="快捷键 3">近 30 天</button>
+      <button data-preset="all" class="on" title="快捷键 4">全部</button>
     </div>
-    <span class="sep"></span>
-    <label>从 <input type="date" id="fSince"></label>
-    <label>到 <input type="date" id="fUntil"></label>
-    <span class="sep"></span>
-    <label>Harness <select id="fHarness"><option value="">全部</option></select></label>
-    <label>模型 <select id="fModel"><option value="">全部</option></select></label>
-    <label>趋势分组 <select id="fDim">
+    <div class="field-pill" title="自定义起止日期">
+      <span>日期</span>
+      <input type="date" id="fSince" aria-label="开始日期">
+      <span class="arr">→</span>
+      <input type="date" id="fUntil" aria-label="结束日期">
+    </div>
+    <label class="field-pill">Harness <select id="fHarness"><option value="">全部</option></select></label>
+    <label class="field-pill">模型 <select id="fModel"><option value="">全部</option></select></label>
+    <label class="field-pill">分组 <select id="fDim">
       <option value="harness">按 harness</option>
       <option value="model">按模型</option>
     </select></label>
+    <!-- U1：图表指标切换。/api/daily 与 /api/breakdown 本来就带 cost 字段，
+         缓存读 token 动辄占柱子九成高度，但烧钱的大头未必是它——按成本看才回答「钱花在哪」。 -->
+    <div class="seg sm" id="fMetric" role="group" aria-label="图表指标" style="margin-left:auto">
+      <button data-metric="tokens" class="on">按 Token</button>
+      <button data-metric="cost">按成本 $</button>
+    </div>
+    <!-- U3：有筛选时出现，点击清空全部筛选（与 Esc 快捷键同一套 clearAllFilters） -->
+    <button id="btnResetFilter" class="reset-btn" hidden title="清除全部筛选条件（快捷键 Esc）">✕ 重置</button>
   </div>
 
   <section class="hero" id="hero" aria-label="关键指标">
@@ -238,6 +394,20 @@ try {
     <div class="card"><div class="k">近 30 天</div><div class="sk-line"></div></div>
     <div class="card"><div class="k">缓存命中率</div><div class="sk-line"></div></div>
     <div class="card"><div class="k">累计成本</div><div class="sk-line"></div></div>
+  </section>
+
+  <!-- B6：空库时的引导卡（有数据后自动隐藏） -->
+  <section class="onboard" id="onboard" hidden>
+    <div class="ob-ico">◔</div>
+    <div>
+      <div class="ob-title">还没有任何用量数据</div>
+      <div class="ob-steps">
+        <span><b>①</b> 双击 TokenDashboard.exe 运行 <b>scan</b></span>
+        <span><b>②</b> 点右上角「扫描」</span>
+        <span><b>③</b> 在 config.yaml 设预算</span>
+      </div>
+    </div>
+    <div class="ob-act"><button id="btnOnboardScan">⟳ 立即扫描</button></div>
   </section>
 
   <div class="statusbar" id="status"><span class="chip">正在读取本地数据…</span></div>
@@ -271,14 +441,14 @@ try {
 
   <div class="grid">
     <section class="panel">
-      <h2>每日用量趋势 <span class="tag" id="dimLabel">按 harness</span></h2>
+      <h2>每日用量趋势 <span class="tag" id="dimLabel">按 harness</span> <span class="tag" id="dailyMetric">按 tokens</span></h2>
       <div class="chartbox" id="boxDaily">
         <div class="chart" id="chartDaily"></div>
         <div class="empty"><div class="ico">◔</div><div>暂无数据</div><div>先运行 token-dashboard scan</div></div>
       </div>
     </section>
     <section class="panel">
-      <h2>模型分布 <span class="tag">按 tokens</span></h2>
+      <h2>模型分布 <span class="tag" id="modelMetric">按 tokens</span></h2>
       <div class="chartbox" id="boxModels">
         <div class="chart" id="chartModels"></div>
         <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
@@ -295,7 +465,7 @@ try {
       </div>
     </section>
     <section class="panel">
-      <h2>项目分布 <span class="tag">Top 10</span></h2>
+      <h2>项目分布 <span class="tag">Top 10</span> <span class="tag" id="projectMetric">按 tokens</span></h2>
       <div class="chartbox" id="boxProjects">
         <div class="chart short" id="chartProjects"></div>
         <div class="empty"><div class="ico">◔</div><div>暂无数据</div></div>
@@ -306,6 +476,10 @@ try {
   <section class="panel">
     <h2>
       最近请求 <span class="tag" id="reqSortTag">按时间倒序</span>
+      <span class="tag accent-tag" id="sessionFilter" hidden>
+        会话 <b id="sessionFilterId"></b>
+        <a href="#" id="sessionFilterClear" title="清除会话筛选">✕</a>
+      </span>
       <span class="spacer"></span>
       <button id="btnExport" title="按当前筛选条件导出全部明细（CSV，Excel 可直接打开）">⤓ 导出 CSV</button>
       <span class="seg sm" id="reqSizes" role="group" aria-label="每页条数">
@@ -354,6 +528,7 @@ try {
 
   <section class="panel" id="channelPanel" hidden>
     <h2>渠道视图 <span class="tag">来自 cc-switch · 独立口径，不与上面的 harness 总量合并</span>
+      <span class="tag" id="chTrendNote"></span>
       <span class="spacer"></span>
       <label style="font-size:11.5px;color:var(--muted)">渠道
         <select id="fChannel"><option value="">全部</option></select>
@@ -383,7 +558,11 @@ try {
    ========================================================================== */
 const state = {
   harness: "", model: "", channel: "", since: "", until: "", dim: "harness",
+  sessionId: "",   // B5：从会话明细点进来时的会话筛选
   reqPage: 1, reqSize: 20, sort: "ts", order: "desc",
+  metric: "tokens",      // U1：图表指标（tokens / cost）
+  unpricedOpen: false,   // B4：未定价面板的展开状态（30s 轮询重绘后要保持）
+  openSessions: new Set(),  // B4：展开过明细的会话 id（轮询重绘后按此恢复）
 };
 const PRESET_DAYS = { "7": 6, "30": 29 };
 const HAS_ECHARTS = typeof echarts !== "undefined";
@@ -396,17 +575,40 @@ function qs(extra = {}) {
   for (const k in o) if (o[k]) p.set(k, o[k]);
   return p.toString();
 }
-function copyText(text) {
-  const done = () => toast("已复制：" + text);
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).then(done, () => toast("复制失败"));
+/** B5：会话下钻只作用于请求表（评审要求：/api/requests + /api/daily 透传 session_id）。
+ *  KPI / 图表保持原有口径，否则同一屏上「筛选后的 KPI」和「全部会话」会互相矛盾。 */
+function reqQs(extra = {}) {
+  return qs(Object.assign({ session_id: state.sessionId }, extra));
+}
+/**
+ * 复制文本到剪贴板。
+ * Clipboard API 在非安全上下文、无权限的 WebView、或用户拒绝授权时会 reject——
+ * 必须回退到 execCommand，否则用户看到「复制失败」但其实可以复制。
+ * okMsg 可选：长文本（YAML 模板）不适合把全文塞进 toast。
+ */
+function copyText(text, okMsg) {
+  const done = () => toast(okMsg || ("已复制：" + text));
+  const fail = () => toast("复制失败，请手动选择文本");
+  const legacy = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    ok ? done() : fail();
+  };
+  if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, legacy);
     return;
   }
-  const ta = document.createElement("textarea");
-  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-  document.body.appendChild(ta); ta.select();
-  try { document.execCommand("copy"); done(); } catch (e) { toast("复制失败"); }
-  document.body.removeChild(ta);
+  legacy();
 }
 
 /* ============================================================================
@@ -455,30 +657,98 @@ function initCharts() {
   window.addEventListener("resize", () => {
     [cDaily, cModels, cProjects, cHourly, cChannelTrend].forEach(c => c && c.resize());
   });
+  // U2：点击「每日用量趋势」柱子 → 筛选到当天（再点同一天恢复全部）。
+  // 图表从「只能看」变成「能下钻」，不用再去顶部下拉框翻日期。
+  cDaily.on("click", params => {
+    const d = params && params.name;
+    if (!d) return;
+    if (state.since === d && state.until === d) {
+      applyPreset("all");
+      toast("已恢复全部日期");
+    } else {
+      state.since = state.until = d;
+      document.getElementById("fSince").value = d;
+      document.getElementById("fUntil").value = d;
+      syncPresets();
+      toast(`已下钻到 ${d}（再次点击柱子恢复）`);
+    }
+    onFilterChange();
+  });
+  // U2：点击「模型分布」扇区 → 筛选该模型（再点同一扇区取消）。
+  cModels.on("click", params => {
+    const m = params && params.name;
+    if (!m || m === "-") return;
+    state.model = state.model === m ? "" : m;
+    document.getElementById("fModel").value = state.model;
+    toast(state.model ? `已筛选模型：${m}` : "已取消模型筛选");
+    onFilterChange();
+  });
 }
-function setEmpty(id, empty) {
+
+/** U1：图表标题旁的指标 tag 与当前口径保持一致。 */
+function syncMetricTags() {
+  const t = state.metric === "cost" ? "按成本" : "按 tokens";
+  for (const id of ["dailyMetric", "modelMetric", "projectMetric"]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t;
+  }
+}
+function setEmpty(id, empty, text) {
   const el = document.getElementById(id);
-  if (el) el.classList.toggle("is-empty", !!empty);
+  if (!el) return;
+  el.classList.toggle("is-empty", !!empty);
+  // B9：允许调用方覆盖占位文案（窄屏渠道趋势用「宽屏查看渠道趋势」）
+  const box = el.querySelector(".empty");
+  if (box) {
+    if (text) {
+      if (!box.dataset.orig) box.dataset.orig = box.innerHTML;
+      box.innerHTML = text;
+    } else if (box.dataset.orig) {
+      box.innerHTML = box.dataset.orig;
+      delete box.dataset.orig;
+    }
+  }
 }
 /** 无数据时不 setOption（空饼图/空坐标轴会留下残影），直接清空并显示占位。 */
-function blank(chart, boxId) {
+function blank(chart, boxId, text) {
   if (chart) chart.clear();
   setLoading(boxId, false);
-  setEmpty(boxId, true);
+  setEmpty(boxId, true, text);
+}
+
+/** U1：当前指标下的取值 / 格式化。cost 字段 /api/daily 与 /api/breakdown 本来就返回。 */
+function metricHelpers() {
+  const isCost = state.metric === "cost";
+  return {
+    valOf: r => isCost ? (r.cost || 0) : (r.tokens || 0),
+    fmtVal: v => isCost ? money(v) : fmt(v),
+    // 成本量级远小于 token（整月可能只有几美元）：compactAxis 会把 <$0.5 全归零成
+    // "$0"，坐标轴就废了。小金额按分位显示，大金额仍走紧凑格式。
+    axisFmt: v => {
+      if (!isCost) return compactAxis(v);
+      if (!v) return "$0";
+      if (v >= 1000) return "$" + compactAxis(v);
+      if (v >= 100) return "$" + Math.round(v);
+      if (v >= 1) return "$" + Number(v.toFixed(1));
+      if (v >= 0.01) return "$" + Number(v.toFixed(2));
+      return "$" + Number(v.toFixed(3));
+    },
+  };
 }
 
 function renderDailyChart(rows) {
   if (!cDaily) return setLoading("boxDaily", false);
   const t = chartTheme();
+  const { valOf, fmtVal, axisFmt } = metricHelpers();
   const dates = [...new Set(rows.map(r => r.date))].sort();
   if (!dates.length) return blank(cDaily, "boxDaily");
   const keys = [...new Set(rows.map(r => r.key))];
   const totals = {};
-  rows.forEach(r => { totals[r.key] = (totals[r.key] || 0) + (r.tokens || 0); });
+  rows.forEach(r => { totals[r.key] = (totals[r.key] || 0) + valOf(r); });
   const top = keys.slice().sort((a, b) => totals[b] - totals[a]).slice(0, 8);
   const other = keys.filter(k => !top.includes(k));
   const map = {};
-  rows.forEach(r => { map[r.date + "|" + r.key] = r.tokens; });
+  rows.forEach(r => { map[r.date + "|" + r.key] = valOf(r); });
   const series = top.map(k => ({
     name: k, type: "bar", stack: "t", barMaxWidth: 22,
     itemStyle: { color: colorFor(k), borderRadius: [3, 3, 0, 0] },
@@ -494,7 +764,7 @@ function renderDailyChart(rows) {
   }
   const ax = axisCommon();
   cDaily.setOption({
-    tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmt,
+    tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmtVal,
       axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.12)" } } }),
     legend: { textStyle: { color: t.muted, fontSize: 11 }, top: 0, icon: "roundRect",
               itemWidth: 10, itemHeight: 10 },
@@ -502,7 +772,7 @@ function renderDailyChart(rows) {
     xAxis: Object.assign({ type: "category", data: dates }, ax,
       { axisLabel: { color: t.muted, fontSize: 10, hideOverlap: true } }),
     yAxis: Object.assign({ type: "value" }, ax,
-      { axisLabel: { color: t.muted, fontSize: 10, formatter: compactAxis } }),
+      { axisLabel: { color: t.muted, fontSize: 10, formatter: axisFmt } }),
     series,
   }, true);
   setEmpty("boxDaily", false);
@@ -512,13 +782,27 @@ function renderDailyChart(rows) {
 function renderModelChart(rows) {
   if (!cModels) return setLoading("boxModels", false);
   const t = chartTheme();
+  const { valOf, fmtVal } = metricHelpers();
   const data = rows.slice(0, 8).map(r => ({
-    name: r.key, value: r.tokens, itemStyle: { color: colorFor(r.key) },
-  }));
+    name: r.key, value: valOf(r), itemStyle: { color: colorFor(r.key) },
+  })).filter(d => d.value > 0);
   if (!data.length) return blank(cModels, "boxModels");
+  // 环形中心放当前口径的汇总值：不用来回扫图例就能读到「这一屏一共多少」
+  const totalSum = rows.reduce((acc, r) => acc + valOf(r), 0);
+  const centerMain = state.metric === "cost" ? money(totalSum) : compact(totalSum);
   // 面板只有 1fr 宽，长模型名放不进扇区外标签；图例竖排在右侧，完整名字和数值看 tooltip
   cModels.setOption({
-    tooltip: Object.assign(tipBase(), { trigger: "item", valueFormatter: fmt }),
+    title: {
+      text: centerMain,
+      subtext: `${rows.length} 个模型`,
+      left: "30.5%",
+      top: "41%",
+      textAlign: "center",
+      textStyle: { color: t.text, fontSize: 16, fontWeight: 650 },
+      subtextStyle: { color: t.muted, fontSize: 10.5 },
+      itemGap: 3,
+    },
+    tooltip: Object.assign(tipBase(), { trigger: "item", valueFormatter: fmtVal }),
     legend: {
       type: "scroll", orient: "vertical", right: 2, top: "middle", icon: "circle",
       itemWidth: 8, itemHeight: 8, itemGap: 6,
@@ -527,8 +811,8 @@ function renderModelChart(rows) {
       formatter: n => n.length > 19 ? n.slice(0, 18) + "…" : n,
     },
     series: [{
-      type: "pie", radius: ["36%", "54%"], center: ["31%", "50%"], data,
-      itemStyle: { borderColor: t.surface, borderWidth: 2 },
+      type: "pie", radius: ["38%", "56%"], center: ["31%", "50%"], data,
+      itemStyle: { borderColor: t.surface, borderWidth: 2, borderRadius: 4 },
       label: { show: false }, labelLine: { show: false },
       emphasis: { scale: true, scaleSize: 6,
                   itemStyle: { shadowBlur: 14, shadowColor: "rgba(0,0,0,.35)" } },
@@ -541,7 +825,8 @@ function renderModelChart(rows) {
 function renderProjectChart(rows) {
   if (!cProjects) return setLoading("boxProjects", false);
   const t = chartTheme();
-  const data = rows.slice(0, 10).reverse();
+  const { valOf, fmtVal, axisFmt } = metricHelpers();
+  const data = rows.slice(0, 10).filter(r => valOf(r) > 0).reverse();
   if (!data.length) return blank(cProjects, "boxProjects");
   const ax = axisCommon();
   // 项目只出现在这一张图里，用强调色统一（跨图一致的是模型/harness 这类多图共现的 key）
@@ -550,17 +835,17 @@ function renderProjectChart(rows) {
     { offset: 1, color: t.accent + "99" },
   ]);
   cProjects.setOption({
-    tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmt,
+    tooltip: Object.assign(tipBase(), { trigger: "axis", valueFormatter: fmtVal,
       axisPointer: { type: "shadow", shadowStyle: { color: "rgba(127,127,127,.12)" } } }),
     grid: { left: 140, right: 34, top: 8, bottom: 20 },
     xAxis: Object.assign({ type: "value" }, ax,
-      { axisLabel: { color: t.muted, fontSize: 10, formatter: compactAxis } }),
+      { axisLabel: { color: t.muted, fontSize: 10, formatter: axisFmt } }),
     yAxis: Object.assign({ type: "category", data: data.map(r => r.key) }, ax,
       { axisLabel: { color: t.muted, fontSize: 10, width: 128, overflow: "truncate",
                      formatter: v => shortPath(v) },
         splitLine: { show: false } }),
     series: [{
-      type: "bar", data: data.map(r => r.tokens),
+      type: "bar", data: data.map(r => valOf(r)),
       barMaxWidth: 14, itemStyle: { color: grad, borderRadius: [0, 4, 4, 0] },
     }],
   }, true);
@@ -616,11 +901,6 @@ function rerenderCharts() {
 /* ============================================================================
    6. Hero：今日 / 近 7 天 / 近 30 天 / 缓存命中率 / 累计成本
    ========================================================================== */
-function sumRange(rows, from, to) {
-  let s = 0;
-  for (const r of rows) if (r.date >= from && r.date <= to) s += r.tokens || 0;
-  return s;
-}
 function deltaPct(cur, prev) {
   if (!prev) return null; // 昨天为 0：不显示百分比，避免 Infinity / NaN
   return (cur - prev) / prev * 100;
@@ -628,60 +908,89 @@ function deltaPct(cur, prev) {
 function deltaHtml(p, label) {
   const tail = `<span class="muted">${esc(label)}</span>`;
   if (p === null || !isFinite(p) || Math.abs(p) < 0.05) {
-    return `<div class="d flat">— ${tail}</div>`;
+    return `<div class="d flat"><span class="d-pill">0.0%</span> ${tail}</div>`;
   }
   const up = p > 0;
-  return `<div class="d ${up ? "up" : "down"}">${up ? "▲" : "▼"} ${Math.abs(p).toFixed(1)}% ${tail}</div>`;
+  return `<div class="d ${up ? "up" : "down"}"><span class="d-pill">${up ? "↑" : "↓"} ${Math.abs(p).toFixed(1)}%</span> ${tail}</div>`;
 }
 
-function heroCards(s, yearRows) {
-  const all = s.all || {}, today = s.today || {}, d7 = s.last7d || {}, d30 = s.last30d || {};
+/* KPI 卡右上角语义图标：一眼区分五张卡各回答什么问题 */
+const HERO_ICONS = {
+  range: '<svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
+  today: '<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  d7:    '<svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
+  d30:   '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  hit:   '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  cost:  '<svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+};
+
+function heroCards(s) {
+  const all = s.all || {}, today = s.today || {}, yesterday = s.yesterday || {};
+  const d7 = s.last7d || {}, prev7d = s.prev7d || {}, d30 = s.last30d || {};
   const range = s.range || {};
   // 没有任何事件时展示 0 而不是 "-"；有事件但没算出售价时保留 "-"（表示缺价格）
   const tk = o => (o && o.events) ? (o.tokens || 0) : 0;
-  const end = todayNoon();
-  const tStr = localDate(end), yStr = localDate(addDays(end, -1));
-  const w1 = sumRange(yearRows, localDate(addDays(end, -6)), tStr);
-  const w0 = sumRange(yearRows, localDate(addDays(end, -13)), localDate(addDays(end, -7)));
-  const tTok = sumRange(yearRows, tStr, tStr);
-  const yTok = sumRange(yearRows, yStr, yStr);
 
   const inp = all.input || 0, cr = all.cache_read || 0;
   const hit = (inp + cr) > 0 ? cr / (inp + cr) * 100 : null;
   const unpriced = all.unpriced || 0;
+  const bUsd = (s.budget || {}).monthly_usd;
+  const mSpent = (s.month || {}).cost || 0;
+  // B3：预算超支时「累计成本」卡联动变红（month 是全量口径，见 /api/summary 注释）
+  const overBudget = bUsd && bUsd > 0 && mSpent >= bUsd;
   const filtered = !!(state.harness || state.model || state.since || state.until);
 
   const cards = [];
-  // C1：有筛选时先给一张「所选范围」卡。5 张固定窗口卡不随筛选变化，
+  // C1：有筛选时先给一张「所选范围」卡。5 张固定窗口卡不随日期筛选变化，
   // 用户很容易以为筛选没生效——用一张 accent 描边的卡把筛选结果顶到最前面。
   if (filtered) {
-    const bits = [];
-    if (state.harness) bits.push(state.harness);
-    if (state.model) bits.push(state.model);
-    if (state.since && state.until) bits.push(`${state.since} ~ ${state.until}`);
-    else if (state.since) bits.push(`${state.since} 起`);
-    else if (state.until) bits.push(`至 ${state.until}`);
+    // 筛选条件本身在状态条 chip 里已经写明（那里空间充足），卡片只放数字。
+    // A1：环比直接读后端算好的 prev_range，前端不再自己推窗口。
+    // 后端保证两段等长、不重叠、都走 totals()，与卡片主值严格同源。
+    const prev = s.prev_range;
+    const pTok = prev ? (prev.events ? (prev.tokens || 0) : 0) : null;
+    const pCost = prev ? (prev.events ? (prev.cost || 0) : 0) : null;
+    const win = s.prev_window;
+    const delta = deltaHtml(pTok === null ? null : deltaPct(tk(range), pTok), "较前一周期");
+    const costDelta = pCost === null ? null : deltaPct(range.cost || 0, pCost);
+    // 6 列布局下这张卡只有 ~180px 宽，副标题放不下「条数 · 精确值 · 成本 · 窗口」。
+    // 副标题只留最短的两个数字，其余（精确 tokens、成本环比、对比窗口）全进 tooltip。
+    const tips = [
+      `精确 ${fmt(tk(range))} tokens`,
+      `成本 ${money(range.cost)}` +
+        (costDelta === null ? "" : `（较前一周期 ${costDelta > 0 ? "▲" : "▼"}${Math.abs(costDelta).toFixed(1)}%）`),
+    ];
+    if (win) tips.push(`对比窗口 ${win.since} ~ ${win.until}（与所选范围等长）`);
     cards.push({
-      k: "所选范围", v: compact(tk(range)),
-      n: `精确 ${fmt(tk(range))} · ${money(range.cost)}`,
-      d: `<div class="d flat">${fmt(range.events || 0)} 条请求 <span class="muted">${esc(bits.join(" · "))}</span></div>`,
+      k: "所选范围", v: compact(tk(range)), ico: HERO_ICONS.range,
+      d: delta,
+      n: `${fmt(range.events || 0)} 条 · ${money(range.cost)}`,
       cls: "range",
+      title: tips.join(" · "),
     });
   }
+  // B8：环比窗口全部来自后端（yesterday / prev7d），与卡片主值共用 ui.timezone，
+  // 前端不再拿浏览器本地时间自己推窗口——跨时区/改配置后两行数字不会打架。
+  // U4：五张卡统一 4 行结构（标题行 / 主值 / 环比胶囊 / 底部详情行），高度对齐。
   cards.push(
-    { k: "今日", v: compact(tk(today)),
-      d: deltaHtml(deltaPct(tTok, yTok), "vs 昨日"),
-      n: "精确 " + fmt(tk(today)), cls: "accent" },
-    { k: "近 7 天", v: compact(tk(d7)),
-      d: deltaHtml(deltaPct(w1, w0), "vs 前 7 天"),
-      n: "精确 " + fmt(tk(d7)) },
-    { k: "近 30 天", v: compact(tk(d30)), n: "精确 " + fmt(tk(d30)) },
-    { k: "缓存命中率", v: hit === null ? "-" : hit.toFixed(1) + "%",
+    { k: "今日", v: compact(tk(today)), ico: HERO_ICONS.today,
+      d: deltaHtml(deltaPct(tk(today), tk(yesterday)), "vs 昨日"),
+      n: `精确 ${fmt(tk(today))} · ${money(today.cost)}`, cls: "accent" },
+    { k: "近 7 天", v: compact(tk(d7)), ico: HERO_ICONS.d7,
+      d: deltaHtml(deltaPct(tk(d7), tk(prev7d)), "vs 前 7 天"),
+      n: `精确 ${fmt(tk(d7))} · ${money(d7.cost)}` },
+    { k: "近 30 天", v: compact(tk(d30)), ico: HERO_ICONS.d30,
+      d: `<div class="d flat"><span class="d-pill">日均 ${compact(tk(d30) / 30)}</span> <span class="muted">${fmt(d30.events || 0)} 次请求</span></div>`,
+      n: `精确 ${fmt(tk(d30))} · ${money(d30.cost)}` },
+    { k: "缓存命中率", v: hit === null ? "-" : hit.toFixed(1) + "%", ico: HERO_ICONS.hit,
+      d: `<div class="d ${hit >= 70 ? "up" : "flat"}"><span class="d-pill">${hit === null ? "无数据" : hit >= 70 ? "复用极佳" : "常规复用"}</span> <span class="muted">写 ${compact(all.cache_write || 0)}</span></div>`,
       n: `缓存读 ${compact(cr)} · 输入 ${compact(inp)}`, cls: "good",
       title: "cache_read / (input + cache_read)：越高说明上下文复用越好" },
-    { k: "累计成本", v: all.events ? money(all.cost) : money(0),
+    { k: "累计成本", v: all.events ? money(all.cost) : money(0), ico: HERO_ICONS.cost,
+      d: `<div class="d ${overBudget ? "down" : "flat"}"><span class="d-pill">本月 ${money(mSpent)}</span> <span class="muted">共 ${fmt(all.events || 0)} 条</span></div>`,
       n: `${compact(all.tokens || 0)} tokens · ${fmt(unpriced)} 条未定价`,
-      ncls: unpriced > 0 ? "warnc" : "", cls: unpriced > 0 ? "warn" : "" },
+      ncls: overBudget ? "errc" : (unpriced > 0 ? "warnc" : ""),
+      cls: overBudget ? "err" : (unpriced > 0 ? "warn" : "") },
   );
 
   const hero = document.getElementById("hero");
@@ -689,15 +998,16 @@ function heroCards(s, yearRows) {
   hero.classList.toggle("with-range", filtered);
   hero.innerHTML = cards.map(c => `
     <div class="card ${c.cls || ""}"${c.title ? ` title="${esc(c.title)}"` : ""}>
-      <div class="k">${esc(c.k)}</div>
+      <div class="k-row"><span class="k">${esc(c.k)}</span><span class="k-ico">${c.ico || HERO_ICONS.d30}</span></div>
       <div class="v">${esc(c.v)}</div>
       ${c.d || ""}
       ${c.n ? `<div class="n ${c.ncls || ""}">${esc(c.n)}</div>` : ""}
     </div>`).join("");
-  // 固定窗口的卡加一行小字说明，避免「KPI 不跟随筛选」被当成 bug
+  // 固定窗口的卡加一行小字说明，避免「KPI 不跟随筛选」被当成 bug。
+  // A2 之后 KPI 确实跟随 model / harness 筛选（后端带 model），只有日期窗口是固定的。
   if (filtered) {
     document.querySelectorAll("#hero .card:not(.range)").forEach(el => {
-      if (!el.title) el.title = "固定窗口指标（今日 / 近 7 天 / 近 30 天 / 累计），不随筛选变化";
+      if (!el.title) el.title = "固定日期窗口指标（今日 / 近 7 天 / 近 30 天 / 累计），不随日期筛选变化";
     });
   }
 }
@@ -815,13 +1125,15 @@ function statusBar(s, meta) {
   const chips = [
     `<span class="chip">事件 <b>${esc(fmt(all.events || 0))}</b></span>`,
     unpriced > 0
-      ? `<span class="chip warn" title="这些事件的模型不在价格表里，成本未计入">未定价 <b>${esc(fmt(unpriced))}</b> 条 ⚠</span>`
+      ? `<button class="chip warn" id="chipUnpriced" title="这些事件的模型不在价格表里，成本未计入 · 点击展开">未定价 <b>${esc(fmt(unpriced))}</b> 条 ⚠</button>`
       : `<span class="chip ok">全部已定价 ✓</span>`,
   ];
   if (meta.channel_rows) {
     chips.push(`<span class="chip">渠道数据 <b>${esc(fmt(meta.channel_rows))}</b> 行</span>`);
   }
   chips.push(budgetChip(s));
+  // 注意：会话下钻（state.sessionId）只作用于请求表，不算全局筛选——
+  // 它有自己的 tag（请求表标题旁），放进这里会让「筛选 <tokens>」显示全量数字。
   if (state.harness || state.model || state.since || state.until) {
     const bits = [];
     if (state.harness) bits.push(state.harness);
@@ -830,21 +1142,127 @@ function statusBar(s, meta) {
     if (state.until) bits.push("至 " + state.until);
     chips.push(`<span class="chip accent">筛选 <b>${esc(compact((s.range || {}).tokens || 0))}</b> · ${esc(bits.join(" · "))}</span>`);
   }
-  document.getElementById("status").innerHTML = chips.filter(Boolean).join("");
+  document.getElementById("status").innerHTML =
+    chips.filter(Boolean).join("") + unpricedPanel(s);
 }
 
-/* C11 预算提醒：<80% 绿 / 80-100% amber / 超支红。未配置预算时不渲染。 */
+/* B2：未定价模型清单。默认收起，点 chip 展开；每个模型一个「复制价格模板」。
+   B4：展开状态记进 state.unpricedOpen——面板每 30s 轮询会重绘 #status，
+   不记下来的话用户正复制价格模板时面板会被自动收起。 */
+function unpricedPanel(s) {
+  const rows = s.unpriced_models || [];
+  if (!rows.length) return "";
+  const items = rows.map(r => {
+    const name = r.model && r.model !== "-" ? r.model : "";
+    const label = name || "（无模型名）";
+    // 没有模型名的行（采集时缺 model 字段）不能生成价格模板：定价键就是模型名。
+    const btn = name
+      ? `<button data-copy-price="${esc(name)}" title="复制这个模型的 pricing.overrides.yaml 模板">复制价格模板</button>`
+      : `<span class="up-meta" title="事件缺少 model 字段，无法按模型定价">无法定价</span>`;
+    return `<div class="up-row">
+      <span class="up-name" title="${esc(label)}">${esc(label)}</span>
+      <span class="up-meta">${esc(fmt(r.events))} 条 · ${esc(compact(r.tokens))}</span>
+      ${btn}
+    </div>`;
+  }).join("");
+  return `<div class="unpriced-panel" id="unpricedPanel"${state.unpricedOpen ? "" : " hidden"}>
+    <div class="up-head">
+      <span>这些模型不在价格表里，成本未计入。点「复制价格模板」→ 粘贴到
+        <b>config/pricing.overrides.yaml</b> 的 <b>models:</b> 下填好价格，然后点右侧按钮重新计算。</span>
+      <button id="btnUpdatePricing" title="下载最新 LiteLLM 价格表，按 config/pricing.overrides.yaml 的覆盖规则重算全部事件成本（U5）">↻ 联网更新官方价格表</button>
+    </div>
+    <div class="up-list">${items}</div>
+  </div>`;
+}
+
+/** U5：一键联网更新价格表并重算成本（与 CLI `update-pricing` 同一套后端逻辑）。 */
+async function updatePricing(btn) {
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = "更新中…";
+  try {
+    const r = await fetch("/api/pricing/update", { method: "POST" });
+    if (!r.ok) {
+      let detail = "";
+      try { detail = (await r.json()).detail || ""; } catch (e) { /* 非 JSON 响应 */ }
+      throw new Error(detail || ("/api/pricing/update -> " + r.status));
+    }
+    const res = await r.json();
+    toast(`价格表已更新：重算 ${fmt(res.priced)} 条事件，${fmt(res.cleared)} 条仍无法定价`);
+    refresh("auto");
+  } catch (e) {
+    toast("更新价格表失败：" + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+/** B2 的价格模板：模型名按 YAML 规则决定要不要加引号。 */
+function priceTemplate(model) {
+  const name = String(model || "");
+  const safe = /^[A-Za-z0-9._\/:-]+$/.test(name) && !name.startsWith("-");
+  const key = safe ? name : `"${name.replace(/"/g, '\\"')}"`;
+  return [
+    "models:",
+    `  ${key}:`,
+    "    input: 0.0        # USD / 1M tokens",
+    "    output: 0.0",
+    "    cache_read: 0.0",
+    "    cache_write: 0.0",
+    "",
+  ].join("\n");
+}
+
+/* C11 预算提醒：<80% 绿 / 80-100% amber / 超支红。未配置时也给出可点击的入口（B3）。 */
 function budgetChip(s) {
   const budget = (s.budget || {}).monthly_usd;
-  if (!budget || !(budget > 0)) return "";
   const spent = (s.month || {}).cost;
+  if (!budget || !(budget > 0)) {
+    // B3：未配置预算 → chip 变成按钮，点击直接设预算（写回 config.yaml，无需重启）
+    return `<button class="chip" id="chipBudget" title="点击设置月度预算（写入 config.yaml，立即生效）">未设预算 · 点此设置</button>`;
+  }
   if (!isNum(spent)) return `<span class="chip">预算 <b>${esc(money(budget))}</b> / 月 · 本月未定价</span>`;
+  // B3：<80% 绿 / 80-100% amber / ≥100% 红——此前两个分支都是 warn，超支不红
   const pct = spent / budget * 100;
-  const cls = pct >= 100 ? "warn" : pct >= 80 ? "warn" : "ok";
+  const cls = pct >= 100 ? "err" : pct >= 80 ? "warn" : "ok";
   const left = budget - spent;
   const tail = left >= 0 ? `剩 ${money(left)}` : `超支 ${money(-left)}`;
-  return `<span class="chip ${cls}" title="预算 monthly_usd=${esc(budget)}，本月 1 号至今 ${esc(money(spent))}（${pct.toFixed(1)}%）">
-    本月 <b>${esc(money(spent))}</b> / ${esc(money(budget))} · ${esc(pct.toFixed(0))}% · ${esc(tail)}</span>`;
+  return `<button class="chip ${cls}" id="chipBudget" title="预算 monthly_usd=${esc(budget)}，本月 1 号至今 ${esc(money(spent))}（${pct.toFixed(1)}%）· 点击修改">
+    本月 <b>${esc(money(spent))}</b> / ${esc(money(budget))} · ${esc(pct.toFixed(0))}% · ${esc(tail)}</button>`;
+}
+
+/** B3：设置预算。用 prompt 而不是自建弹窗——只改一个数字，不值得一套模态框。 */
+async function editBudget() {
+  const cur = (lastData && lastData.s && lastData.s.budget && lastData.s.budget.monthly_usd) || "";
+  const raw = window.prompt(
+    "设置月度预算（USD）。留空或填 0 表示关闭预算提醒。\n" +
+    "会写回 config/config.yaml 并立即生效，不需要重启。",
+    cur === null || cur === undefined ? "" : String(cur),
+  );
+  if (raw === null) return;                       // 用户点了取消
+  const trimmed = raw.trim();
+  const value = trimmed === "" ? null : Number(trimmed);
+  if (trimmed !== "" && !isFinite(value)) { toast("请输入数字"); return; }
+  try {
+    const r = await fetch("/api/config/budget", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ monthly_usd: value }),
+    });
+    if (!r.ok) {
+      // 后端把失败原因放在 detail 里（如「写入配置失败：Permission denied」），
+      // 只报 500 用户不知道该怎么办。
+      let detail = "";
+      try { detail = (await r.json()).detail || ""; } catch (e) { /* 非 JSON 响应 */ }
+      throw new Error(detail || ("/api/config/budget -> " + r.status));
+    }
+    const res = await r.json();
+    toast(res.monthly_usd ? `预算已设为 ${money(res.monthly_usd)} / 月` : "已关闭预算提醒");
+    refresh("auto");
+  } catch (e) {
+    toast("设置预算失败：" + e.message);
+  }
 }
 
 /* ============================================================================
@@ -854,6 +1272,11 @@ function requestRows(rows) {
   if (!rows.length) {
     return `<tr><td class="empty-row" colspan="11">暂无数据</td></tr>`;
   }
+  // U4：内联比例条（Data Bar）——先算当页最大合计，逐行画渐变背景，
+  // 密集数字里一眼扫出哪条请求最大。只做背景色，不引入任何图表元素。
+  const maxTot = Math.max(1, ...rows.map(r =>
+    (r.input_tokens || 0) + (r.cache_read_tokens || 0) +
+    (r.cache_write_tokens || 0) + (r.output_tokens || 0)));
   return rows.map(r => {
     const inp = r.input_tokens || 0, cr = r.cache_read_tokens || 0, cw = r.cache_write_tokens || 0;
     const out = r.output_tokens || 0, rs = r.reasoning_tokens || 0;
@@ -861,24 +1284,30 @@ function requestRows(rows) {
     const total = inp + cr + cw + out;
     const denom = inp + cr;
     const rate = denom > 0 ? cr / denom * 100 : null;
+    // 缓存率：微进度条 + 数字（≥80% 绿），比纯数字扫得快
     const rateCell = rate === null
       ? `<span class="faint">-</span>`
-      : `<span class="${rate >= 80 ? "good" : ""}">${rate.toFixed(1)}%</span>`;
+      : `<span class="rate-wrap"><span class="rate-bar ${rate >= 80 ? "good" : ""}"><i style="width:${Math.round(rate)}%"></i></span><span class="${rate >= 80 ? "good" : ""}">${rate.toFixed(0)}%</span></span>`;
     const h = r.harness || "-";
     const cost = r.cost_usd === null || r.cost_usd === undefined
       ? `<span class="faint" title="该模型不在价格表中">-</span>`
       : esc(money(r.cost_usd));
+    // B7：合计列 hover 展示五项构成（与「输出」列的 hover 风格一致），
+    // 顺便让人一眼确认推理没有被重复计入合计。
+    const totalTip = `输入 ${fmt(inp)} · 缓存读 ${fmt(cr)} · 缓存写 ${fmt(cw)} · ` +
+                     `输出(含推理) ${fmt(out)} · 其中推理 ${fmt(rs)}`;
+    const barPct = Math.min(100, Math.round(total / maxTot * 100));
     return `<tr>
       <td class="l mono dim" title="${esc(r.ts || "")}">${esc(fmtTime(r.ts))}</td>
       <td class="l"><span class="hbadge"><i style="background:${colorFor(h)}"></i>${esc(h)}</span></td>
-      <td class="l" title="${esc(r.raw_model || r.model || "")}">${esc(r.model || "-")}</td>
+      <td class="l" title="${esc(r.raw_model || r.model || "")}"><span class="model-pill">${esc(r.model || "-")}</span></td>
       <td class="l dim">${esc(r.channel || "-")}</td>
       <td>${esc(fmt(inp))}</td>
       <td>${esc(fmt(cr))}</td>
       <td>${esc(fmt(out))}</td>
       <td class="col-low">${esc(fmt(rs))}</td>
       <td class="col-low">${rateCell}</td>
-      <td title="输入 + 缓存读 + 缓存写 + 输出（输出已含推理）"><b>${esc(fmt(total))}</b></td>
+      <td title="${esc(totalTip)}" style="background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 13%, transparent) ${barPct}%, transparent ${barPct}%)"><b>${esc(fmt(total))}</b></td>
       <td>${cost}</td>
     </tr>`;
   }).join("");
@@ -926,8 +1355,10 @@ function sessionRows(rows) {
     const sid = r.session_id || "-";
     const pseudo = r.pseudo
       ? `<span class="badge" title="该来源的日志没有 session_id，按「来源 + 文件」聚合">无会话</span>` : "";
-    return `<tr>
-      <td class="l"><span class="copy mono" data-copy="${esc(sid)}" title="点击复制：${esc(sid)}">${esc(sid.slice(0, 12))}</span>${pseudo}</td>
+    // B5：只有真会话才能按 session_id 展开（伪会话没有 id，后端查不到）
+    const openable = !r.pseudo && r.session_id;
+    return `<tr class="sess-row${openable ? "" : " no-detail"}" ${openable ? `data-session="${esc(sid)}"` : ""}>
+      <td class="l"><span class="caret">${openable ? "▸" : ""}</span><span class="copy mono" data-copy="${esc(sid)}" title="点击复制：${esc(sid)}">${esc(sid.slice(0, 12))}</span>${pseudo}</td>
       <td class="l">${esc(r.harness || "-")}</td>
       <td class="l" title="${esc(r.project || "")}">${esc(shortPath(r.project))}</td>
       <td class="l dim" title="${esc(fullTime(r.started))}">${esc(relTime(r.started))}</td>
@@ -939,21 +1370,75 @@ function sessionRows(rows) {
   }).join("");
 }
 
+/** B5：会话展开的明细行——该会话按天的 tokens / 成本，数据来自 /api/daily?session_id=。
+ *  B4：展开/收起同步记进 state.openSessions，30s 轮询整表重绘后按它恢复，
+ *  用户正看的按天消耗不会突然被自动收起。 */
+async function toggleSessionRow(tr) {
+  const sid = tr.dataset.session;
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains("sess-detail")) {
+    // 已展开 → 收起
+    next.remove();
+    tr.classList.remove("open");
+    state.openSessions.delete(sid);
+    return;
+  }
+  state.openSessions.add(sid);
+  tr.classList.add("open");
+  const detail = document.createElement("tr");
+  detail.className = "sess-detail";
+  detail.innerHTML = `<td colspan="8"><div class="sd-wrap">
+    <div class="sd-empty">加载中…</div></div></td>`;
+  tr.after(detail);
+  const wrap = detail.querySelector(".sd-wrap");
+  try {
+    const rows = await jget("/api/daily?" + qs({ dim: "total", session_id: sid }));
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="sd-empty">该会话在当前筛选下没有按天数据</div>`;
+      return;
+    }
+    const tot = rows.reduce((a, r) => a + (r.tokens || 0), 0);
+    const totCost = rows.reduce((a, r) => a + (r.cost_usd || 0), 0);
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th class="l">日期</th><th>请求</th><th>Tokens</th><th>成本</th><th>未定价</th></tr></thead>
+        <tbody>${rows.map(r => `<tr>
+          <td class="l">${esc(r.date)}</td>
+          <td>${esc(fmt(r.events))}</td>
+          <td>${esc(fmt(r.tokens))}</td>
+          <td>${esc(money(r.cost_usd))}</td>
+          <td class="${r.unpriced ? "" : "dim"}">${esc(fmt(r.unpriced))}</td>
+        </tr>`).join("")}</tbody>
+      </table>
+      <div class="sd-foot">
+        <span>合计 <b>${esc(fmt(tot))}</b> tokens · <b>${esc(money(totCost))}</b></span>
+        <a href="#" data-req-for="${esc(sid)}">查看全部请求 →</a>
+      </div>`;
+  } catch (e) {
+    wrap.innerHTML = `<div class="sd-empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
 function dailyRows(rows) {
   if (!rows.length) {
     return `<tr><td class="empty-row" colspan="9">暂无数据 —— 先运行 token-dashboard scan</td></tr>`;
   }
-  return rows.map(r => `<tr>
+  // U4：合计列 Data Bar（与请求表同一套视觉语言）
+  const maxTok = Math.max(1, ...rows.map(r => r.tokens || 0));
+  return rows.map(r => {
+    const barPct = Math.min(100, Math.round((r.tokens || 0) / maxTok * 100));
+    return `<tr>
       <td class="l">${esc(r.date)}</td>
       <td>${esc(fmt(r.input_tokens))}</td>
       <td>${esc(fmt(r.cache_read_tokens))}</td>
       <td>${esc(fmt(r.cache_write_tokens))}</td>
       <td>${esc(fmt(r.output_tokens))}</td>
       <td>${esc(fmt(r.reasoning_tokens))}</td>
-      <td><b>${esc(fmt(r.tokens))}</b></td>
+      <td style="background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent) ${barPct}%, transparent ${barPct}%)"><b>${esc(fmt(r.tokens))}</b></td>
       <td>${esc(money(r.cost_usd))}</td>
       <td class="${r.unpriced ? "" : "dim"}">${esc(fmt(r.unpriced))}</td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 }
 
 function channelRows(rows) {
@@ -994,6 +1479,15 @@ function syncChannelOptions(channels, summaryRows) {
 /** C6：渠道维度趋势图（按渠道堆叠的面积图，与上方表格同源）。 */
 function renderChannelTrend(ch) {
   if (!cChannelTrend) return setLoading("boxChannelTrend", false);
+  // B9：窄屏下渠道趋势图没有可读性（8 条线挤在 680px 内），原来直接 return
+  // 会留下一块纯空白——现在给一句明确提示，并同步标题旁的 note。
+  const note = document.getElementById("chTrendNote");
+  if (window.innerWidth <= 680) {
+    if (note) note.textContent = "窄屏已隐藏，建议宽屏查看";
+    return blank(cChannelTrend, "boxChannelTrend",
+      `<div class="ico">↔</div><div>宽屏查看渠道趋势</div><div>当前窗口太窄，渠道堆叠图读不清</div>`);
+  }
+  if (note) note.textContent = "";
   const t = chartTheme();
   const rows = (ch && ch.daily) || [];
   const dates = [...new Set(rows.map(r => r.date))].sort();
@@ -1037,14 +1531,19 @@ function renderSub(s, meta) {
     : "-";
   // 版本号由 /api/meta 带出（D2：单一来源在 __init__.py，CI 按 tag 注入）
   const ver = meta.version ? ` · v${meta.version}` : "";
-  document.getElementById("sub").textContent =
-    `时区 ${s.timezone || "-"} · 数据范围 ${meta.min_date || "-"} ~ ${meta.max_date || "-"} · 更新于 ${t}${ver}`;
+  document.getElementById("sub").innerHTML =
+    `时区 ${esc(s.timezone || "-")} · 数据范围 ${esc(meta.min_date || "-")} ~ ${esc(meta.max_date || "-")} · ` +
+    // B10：「更新于 …」可点击，只重新拉数据（不触发 /api/scan）
+    `<span class="refreshable" id="lastUpd" title="点击重新拉取数据">更新于 ${esc(t)}</span>${esc(ver)}`;
+  // B6：没有历史数据时给引导卡，有数据后自动消失
+  const onboard = document.getElementById("onboard");
+  if (onboard) onboard.hidden = !!meta.min_date;
 }
 
 /** 只刷新最近请求（翻页 / 改页大小 / 改排序时用，不重拉整页数据）。 */
 async function loadRequests() {
   try {
-    const data = await jget("/api/requests?" + qs({
+    const data = await jget("/api/requests?" + reqQs({
       page: state.reqPage, size: state.reqSize, sort: state.sort, order: state.order,
     }));
     // 越界兜底：总数变少时自动回退到最后一页，避免停在空白页
@@ -1104,14 +1603,17 @@ async function refresh(mode) {
         jget("/api/summary?" + qs()),
         jget("/api/meta"),
         jget("/api/daily?" + qs({ dim: state.dim })),
-        jget("/api/breakdown?" + qs({ dim: "model", limit: 10 })),
+        // B1：分布类模块忽略「自身维度」的筛选——选了模型 X 之后，
+        // 「模型分布」若只剩一根柱就失去意义。这里只保留日期 + harness 筛选。
+        jget("/api/breakdown?" + qs({ dim: "model", limit: 10, model: "" })),
         jget("/api/breakdown?" + qs({ dim: "project", limit: 10 })),
         jget("/api/sessions?" + qs({ limit: 30 })),
         jget("/api/daily?" + qs({ dim: "total" })),
-        // 热力图固定看近一年，只跟 harness 走（日期筛选不影响回溯窗口）
-        jget("/api/daily?" + qs({ dim: "total", since: yearSince, until: "" })),
+        // 热力图固定看近一年，只跟 harness / model 走：
+        // 日期筛选不影响回溯窗口，会话下钻也不该把一年的工作回溯裁成一个会话。
+        jget("/api/daily?" + qs({ dim: "total", since: yearSince, until: "", session_id: "" })),
         jget("/api/hourly?" + qs()),
-        jget("/api/requests?" + qs({
+        jget("/api/requests?" + reqQs({
           page: state.reqPage, size: state.reqSize, sort: state.sort, order: state.order,
         })),
         jget("/api/channels?" + qs({ channel: state.channel })),
@@ -1119,7 +1621,7 @@ async function refresh(mode) {
 
     lastData = { s, meta, daily, models, projects, sessions, dAll, yearRows, hourly, ch };
 
-    heroCards(s, yearRows);
+    heroCards(s);
     statusBar(s, meta);
     renderHeatmap(yearRows);
     renderDailyChart(daily);
@@ -1129,6 +1631,10 @@ async function refresh(mode) {
     renderChannelTrend(ch);
 
     document.querySelector("#sessions tbody").innerHTML = sessionRows(sessions);
+    // B4：轮询会整表重绘 tbody，用户展开的会话明细要按 state 恢复（异步拉明细）
+    document.querySelectorAll("#sessions tr.sess-row[data-session]").forEach(tr => {
+      if (state.openSessions.has(tr.dataset.session)) toggleSessionRow(tr);
+    });
     document.querySelector("#daily tbody").innerHTML = dailyRows(dAll);
     const chPanel = document.getElementById("channelPanel");
     chPanel.hidden = !(ch.summary && ch.summary.length);
@@ -1166,6 +1672,11 @@ async function refresh(mode) {
 
     lastUpdated = new Date();
     renderSub(s, meta);
+    // U3：「重置筛选」只在该出现时出现（有任意筛选条件，含会话下钻）
+    const resetBtn = document.getElementById("btnResetFilter");
+    if (resetBtn) {
+      resetBtn.hidden = !(state.harness || state.model || state.since || state.until || state.sessionId);
+    }
     if (manual) toast("已刷新");
   } catch (e) {
     // C5：失败时给出「重试」按钮，别让用户只能手动点刷新
@@ -1195,7 +1706,10 @@ function syncPresets() {
   const btns = document.querySelectorAll("#presets button");
   let matched = null;
   if (!state.since && !state.until) matched = "all";
-  else if (!state.until) {
+  // 只有「起=止=今天」才算「今天」；用户手选的其他单日属于自定义范围
+  else if (state.since && state.until && state.since === state.until
+           && state.since === daysAgo(0)) matched = "today";
+  else if (state.since && !state.until) {
     for (const p in PRESET_DAYS) {
       if (state.since === daysAgo(PRESET_DAYS[p])) { matched = p; break; }
     }
@@ -1203,10 +1717,50 @@ function syncPresets() {
   btns.forEach(b => b.classList.toggle("on", b.dataset.preset === matched));
 }
 
+/** 应用一个预设范围。today = 只筛今天（与热力图点格子一致）。 */
+function applyPreset(p) {
+  if (p === "all") { state.since = ""; state.until = ""; }
+  else if (p === "today") { state.since = state.until = daysAgo(0); }
+  else { state.since = daysAgo(PRESET_DAYS[p]); state.until = ""; }
+  document.getElementById("fSince").value = state.since;
+  document.getElementById("fUntil").value = state.until;
+  syncPresets();
+}
+
+/** B5：把当前筛选写回 URL hash（replaceState，不产生历史记录）。
+ *  深链进来后用户再改筛选 / 清空筛选，地址栏必须跟着变——否则 F5 刷新
+ *  会跳回浮窗带进来的旧日期（#since=... 一直挂在 URL 上）。
+ *  在 onFilterChange / filterToSession / clearAllFilters 里调用：
+ *  所有会改筛选状态的用户操作最终都会经过这三个函数。 */
+function syncHashFromState() {
+  const p = new URLSearchParams();
+  for (const [k, key] of [["since", "since"], ["until", "until"], ["harness", "harness"],
+                          ["model", "model"], ["session_id", "sessionId"]]) {
+    if (state[key]) p.set(k, state[key]);
+  }
+  const h = p.toString();
+  history.replaceState(null, "", h ? "#" + h : location.pathname + location.search);
+}
+
 /** 改筛选必须回到第 1 页——否则改了 harness 还停在第 5 页会显示空表。 */
 function onFilterChange() {
   state.reqPage = 1;
+  syncHashFromState();
   refresh("auto");
+}
+
+/** U3：清空全部筛选。重置按钮与 Esc 快捷键共用这一套，别再各写一份。 */
+function clearAllFilters() {
+  if (!state.harness && !state.model && !state.since && !state.until && !state.sessionId) return;
+  state.harness = ""; state.model = ""; state.since = ""; state.until = ""; state.sessionId = "";
+  document.getElementById("fHarness").value = "";
+  document.getElementById("fModel").value = "";
+  document.getElementById("fSince").value = "";
+  document.getElementById("fUntil").value = "";
+  syncSessionTag();
+  syncPresets();
+  onFilterChange();
+  toast("已清除筛选");
 }
 
 function bind() {
@@ -1251,14 +1805,20 @@ function bind() {
     document.getElementById("dimLabel").textContent = state.dim === "model" ? "按模型" : "按 harness";
     refresh("auto");
   };
+  // U1：图表指标切换（tokens / cost）。只重画图表，不动筛选与表格。
+  document.getElementById("fMetric").addEventListener("click", e => {
+    const b = e.target.closest("button[data-metric]");
+    if (!b || b.classList.contains("on")) return;
+    state.metric = b.dataset.metric;
+    document.querySelectorAll("#fMetric button").forEach(x => x.classList.toggle("on", x === b));
+    syncMetricTags();
+    rerenderCharts();
+  });
+  // U3：显式重置按钮（与 Esc 快捷键共用 clearAllFilters）
+  document.getElementById("btnResetFilter").onclick = () => clearAllFilters();
   document.querySelectorAll("#presets button").forEach(b => {
     b.onclick = () => {
-      const p = b.dataset.preset;
-      if (p === "all") { state.since = ""; state.until = ""; }
-      else { state.since = daysAgo(PRESET_DAYS[p]); state.until = ""; }
-      document.getElementById("fSince").value = state.since;
-      document.getElementById("fUntil").value = state.until;
-      syncPresets();
+      applyPreset(b.dataset.preset);
       onFilterChange();
     };
   });
@@ -1285,10 +1845,9 @@ function bind() {
     loadRequests();
   });
   document.getElementById("btnExport").onclick = () => {
-    // 导出与当前筛选、排序一致；URLSearchParams 已就位，直接拼给浏览器下载
-    const url = "/api/requests?format=csv&" + qs({ sort: state.sort, order: state.order });
-    window.open(url, "_self");
-    toast("正在导出当前筛选的明细…");
+    // 导出与当前筛选、排序一致；URLSearchParams 已就位，直接拼给浏览器下载。
+    // A6：先用 fetch 拿响应头，能识别「达到上限被截断」，再自己触发下载。
+    exportCsv();
   };
   document.getElementById("reqSizes").addEventListener("click", e => {
     const b = e.target.closest("button[data-size]");
@@ -1301,7 +1860,7 @@ function bind() {
     loadRequests();
   });
 
-  // 热力图 tooltip
+  // 热力图 tooltip（B4：点击格子 = 筛选到当天，见 click 监听）
   const hm = document.getElementById("hmGrid");
   hm.addEventListener("pointerover", e => {
     const c = e.target.closest(".hm-cell");
@@ -1311,6 +1870,19 @@ function bind() {
     if (document.getElementById("hmTip").classList.contains("show")) moveHmTip(e);
   });
   hm.addEventListener("pointerleave", hideHmTip);
+  // B4：点日期格 = 筛选到当天（与浮窗迷你柱的深链行为对齐）
+  hm.addEventListener("click", e => {
+    const c = e.target.closest(".hm-cell[data-d]");
+    if (!c) return;
+    const ds = c.dataset.d;
+    state.since = state.until = ds;
+    document.getElementById("fSince").value = ds;
+    document.getElementById("fUntil").value = ds;
+    syncPresets();
+    hideHmTip();
+    onFilterChange();
+    toast(`已筛选到 ${ds}`);
+  });
 
   document.getElementById("btnRefresh").onclick = () => refresh("manual");
   document.getElementById("btnScan").onclick = () => refresh("scan");
@@ -1320,11 +1892,127 @@ function bind() {
     applyTheme(next);
     rerenderCharts();
   };
-  // 会话 id 点击复制
+  // 会话 id 点击复制；行点击展开明细（B5）
   document.getElementById("sessions").addEventListener("click", e => {
     const el = e.target.closest("[data-copy]");
-    if (el) copyText(el.dataset.copy);
+    if (el) { copyText(el.dataset.copy); return; }
+    const link = e.target.closest("[data-req-for]");
+    if (link) {
+      e.preventDefault();
+      filterToSession(link.dataset.reqFor);
+      return;
+    }
+    const tr = e.target.closest("tr.sess-row");
+    if (tr && tr.dataset.session) toggleSessionRow(tr);
   });
+
+  // B2 / B3 / U5：状态条上的 chip 可点击（每次重绘 innerHTML，所以用事件委托）
+  document.getElementById("status").addEventListener("click", e => {
+    const unp = e.target.closest("#chipUnpriced");
+    if (unp) {
+      const panel = document.getElementById("unpricedPanel");
+      if (panel) {
+        panel.hidden = !panel.hidden;
+        // B4：状态记进 state，30s 轮询重绘后展开状态不丢
+        state.unpricedOpen = !panel.hidden;
+      }
+      return;
+    }
+    const upBtn = e.target.closest("#btnUpdatePricing");
+    if (upBtn) { updatePricing(upBtn); return; }
+    if (e.target.closest("#chipBudget")) { editBudget(); return; }
+    const cp = e.target.closest("[data-copy-price]");
+    if (cp) {
+      copyText(priceTemplate(cp.dataset.copyPrice),
+        "已复制。粘贴到 config/pricing.overrides.yaml 的 models: 下填好价格，再点「联网更新官方价格表」");
+    }
+  });
+
+  // B10：点「更新于 …」只重新拉数据，不触发后端扫描
+  document.getElementById("sub").addEventListener("click", e => {
+    if (e.target.closest("#lastUpd")) refresh("manual");
+  });
+
+  // B6：引导卡的「立即扫描」直接复用扫描流程
+  document.getElementById("btnOnboardScan").onclick = () => refresh("scan");
+
+  // 清除会话筛选（请求表标题旁的 ✕）
+  document.getElementById("sessionFilterClear").onclick = e => {
+    e.preventDefault();
+    state.sessionId = "";
+    syncSessionTag();
+    syncHashFromState();   // B5：地址栏里的 session_id 一起去掉
+    state.reqPage = 1;
+    refresh("auto");
+  };
+
+  // B8：键盘快捷键（R 刷新 / 1-4 切范围 / Esc 清筛选）。
+  // 输入框、下拉框里打字不能拦，否则日期框输入 "1" 会被当成切范围。
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const el = e.target;
+    const tag = el && el.tagName ? el.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "select" || tag === "textarea" || (el && el.isContentEditable)) return;
+    if (e.key === "r" || e.key === "R") { e.preventDefault(); refresh("manual"); return; }
+    if (e.key === "Escape") { clearAllFilters(); return; }
+    const preset = { "1": "today", "2": "7", "3": "30", "4": "all" }[e.key];
+    if (preset) {
+      applyPreset(preset);
+      onFilterChange();
+    }
+  });
+}
+
+/** B5：把请求表筛到某个会话（从会话明细的「查看全部请求」跳过来）。 */
+function filterToSession(sid) {
+  state.sessionId = sid || "";
+  state.reqPage = 1;
+  syncSessionTag();
+  syncHashFromState();
+  document.getElementById("reqTable").scrollIntoView({ behavior: "smooth", block: "start" });
+  refresh("auto");
+}
+
+function syncSessionTag() {
+  const tag = document.getElementById("sessionFilter");
+  const idEl = document.getElementById("sessionFilterId");
+  if (!tag) return;
+  tag.hidden = !state.sessionId;
+  if (idEl) idEl.textContent = state.sessionId ? state.sessionId.slice(0, 12) : "";
+}
+
+/**
+ * A6 / B11：导出 CSV。
+ * 用 fetch 而不是 window.open：只有拿到响应头才能判断是否被上限截断，
+ * 也才能把后端返回的文件名（带筛选范围）原样用上。大文件走 blob 下载。
+ */
+async function exportCsv() {
+  const btn = document.getElementById("btnExport");
+  const url = "/api/requests?format=csv&" + reqQs({ sort: state.sort, order: state.order });
+  btn.disabled = true;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("/api/requests?format=csv -> " + r.status);
+    const truncated = r.headers.get("X-Export-Truncated") === "1";
+    const limit = r.headers.get("X-Export-Limit");
+    const blob = await r.blob();
+    const dispo = r.headers.get("Content-Disposition") || "";
+    const m = /filename="([^"]+)"/.exec(dispo);
+    const name = m ? m[1] : "token-dashboard.csv";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast(truncated
+      ? `已导出前 ${fmt(limit ? Number(limit) : 200000)} 行（达到上限，请先加筛选再导出）`
+      : "已导出当前筛选的明细");
+  } catch (e) {
+    toast("导出失败：" + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ============================================================================
@@ -1346,18 +2034,22 @@ function stopPolling() {
    13. 启动
    ========================================================================== */
 /** C8 / D5：支持 /#since=2026-10-15&until=2026-10-15&harness=codex 深链。
- *  浮窗点迷你柱会带着这段 hash 打开面板，这里在首屏刷新前先落进 state。 */
+ *  浮窗点迷你柱会带着这段 hash 打开面板，这里在首屏刷新前先落进 state。
+ *  B5：改成全字段同步——hash 里没有的参数也要清回空值（hash 被清掉时筛选必须
+ *  复位），且所有输入框 / 下拉框 / 会话 tag 都要跟上，否则界面与实际筛选不一致。 */
 function applyHashFilter() {
-  const raw = location.hash.replace(/^#/, "");
-  if (!raw) return false;
-  const p = new URLSearchParams(raw);
+  const p = new URLSearchParams(location.hash.replace(/^#/, ""));
   let hit = false;
-  for (const [k, target] of [["since", "since"], ["until", "until"], ["harness", "harness"], ["model", "model"]]) {
-    const v = p.get(k);
-    if (v) { state[target] = v; hit = true; }
+  for (const [k, target] of [["since", "since"], ["until", "until"], ["harness", "harness"],
+                              ["model", "model"], ["session_id", "sessionId"]]) {
+    const v = p.get(k) || "";
+    if (state[target] !== v) { state[target] = v; hit = true; }
   }
-  if (state.since) document.getElementById("fSince").value = state.since;
-  if (state.until) document.getElementById("fUntil").value = state.until;
+  document.getElementById("fSince").value = state.since;
+  document.getElementById("fUntil").value = state.until;
+  document.getElementById("fHarness").value = state.harness;
+  document.getElementById("fModel").value = state.model;
+  syncSessionTag();
   return hit;
 }
 
@@ -1373,8 +2065,27 @@ initCharts();
 applyHashFilter();
 bind();
 syncPresets();
+syncSessionTag();
+// B9：窗口跨过 680px 断点时重画渠道趋势（窄屏提示 / 宽屏图表要跟着切）
+let lastNarrow = window.innerWidth <= 680;
+window.addEventListener("resize", () => {
+  const narrow = window.innerWidth <= 680;
+  if (narrow !== lastNarrow) {
+    lastNarrow = narrow;
+    if (lastData) renderChannelTrend(lastData.ch);
+  }
+});
 window.addEventListener("hashchange", () => {
   if (applyHashFilter()) { syncPresets(); refresh("auto"); }
+});
+// U6：浮窗（右键菜单「切换主题」）或其他标签页改了主题时实时跟随。
+// storage 事件只在「其他」窗口触发，本窗口写入时不会重复响应。
+window.addEventListener("storage", e => {
+  if (e.key === "td-theme" && (e.newValue === "light" || e.newValue === "dark")
+      && e.newValue !== document.documentElement.dataset.theme) {
+    applyTheme(e.newValue);
+    rerenderCharts();
+  }
 });
 refresh("auto");
 startPolling();

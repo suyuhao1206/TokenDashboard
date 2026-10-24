@@ -103,6 +103,8 @@ def load_config(path: str | None = None) -> dict:
         base = p.parent
     else:
         base = CONFIG_DIR
+    # 记住配置文件位置：面板的「设置预算」要写回同一个文件
+    data["_config_path"] = str(p)
 
     st = data.setdefault("storage", {})
     st["db_path"] = _expand_path(st.get("db_path") or (DATA_DIR / "usage.db"), base)
@@ -115,7 +117,69 @@ def load_config(path: str | None = None) -> dict:
         if "db_path" in c:
             c["db_path"] = _expand_path(c["db_path"], base)
 
+    # pricing.overrides_file 同样相对 config/ 目录展开（config.example.yaml 里写的是
+    # 相对路径 pricing.overrides.yaml）：不展开的话 Pricing 会去进程 cwd 找文件，
+    # 而面板引导用户改的是 config/pricing.overrides.yaml，两边对不上，自定义定价失效。
+    pr = data.setdefault("pricing", {})
+    if pr.get("overrides_file"):
+        pr["overrides_file"] = str(_expand_path(pr["overrides_file"], base))
+
     return data
+
+
+def save_budget(cfg: dict, monthly_usd: float | None) -> Path:
+    """把 budget.monthly_usd 写回配置文件，返回写入路径。
+
+    面板的「设置预算」用它实现「改完立即生效、不用重启」。这里做**行级编辑**
+    而不是 yaml.safe_dump：用户配置文件里的注释和顺序比机器可读性重要得多。
+    找不到 budget 段就自动追加一段。
+    """
+    path = Path(cfg.get("_config_path") or DEFAULT_CONFIG)
+    text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
+    lines = text.splitlines()
+    if monthly_usd is None:
+        value = "null"
+    else:
+        # 不能用 str(x).rstrip("0")：1000.0 会变成 "1"。按整数/小数分别格式化。
+        num = float(monthly_usd)
+        value = str(int(num)) if num.is_integer() else f"{num:.2f}".rstrip("0").rstrip(".")
+
+    budget_at = next((i for i, line in enumerate(lines) if line.strip() == "budget:"), None)
+    if budget_at is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines += [
+            "# ---------- 预算提醒 ----------",
+            "budget:",
+            f"  monthly_usd: {value}",
+        ]
+    else:
+        # budget 段的范围：到下一个顶层键（非空、非注释、不缩进）为止
+        end = len(lines)
+        for i in range(budget_at + 1, len(lines)):
+            s = lines[i]
+            if s.strip() and not s.startswith((" ", "\t", "#")):
+                end = i
+                break
+        key_at = next(
+            (i for i in range(budget_at + 1, end) if lines[i].strip().startswith("monthly_usd:")),
+            None,
+        )
+        if key_at is None:
+            lines.insert(budget_at + 1, f"  monthly_usd: {value}")
+        else:
+            indent = lines[key_at][: len(lines[key_at]) - len(lines[key_at].lstrip())]
+            comment = ""
+            if "#" in lines[key_at]:
+                comment = "  " + lines[key_at][lines[key_at].index("#"):]
+            lines[key_at] = f"{indent}monthly_usd: {value}{comment}"
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # newline="\n"：不让 Windows 把每一行都改写成 CRLF，否则一次改预算
+    # 会在 git diff 里显示「整个文件都变了」。
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    cfg.setdefault("budget", {})["monthly_usd"] = monthly_usd
+    return path
 
 
 def ui_timezone(cfg: dict):

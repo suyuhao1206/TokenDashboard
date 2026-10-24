@@ -48,19 +48,33 @@ try {
   .titlebar button:hover { color: var(--text); background: var(--surface2); border-color: var(--border); }
   .titlebar .iconbtn { font-size: 12px; }
 
+  /* U6：月度预算进度微条（<80% 绿 / 80-100% 黄 / ≥100% 红），悬停显示已用金额。
+     未设置预算时整条隐藏，不占高度。 */
+  .budget-bar { height: 2px; background: var(--border); overflow: hidden; flex: none; }
+  .budget-bar[hidden] { display: none; }
+  .budget-bar i { display: block; height: 100%; width: 0%; background: var(--green);
+                  transition: width .3s; }
+  .budget-bar.warn i { background: var(--amber); }
+  .budget-bar.err i { background: var(--red); }
+
   .body { padding: 7px 12px 9px; flex: 1; display: flex; flex-direction: column;
           gap: 5px; min-height: 0; }
 
-  .row-today { display: flex; align-items: baseline; gap: 8px; line-height: 1.1; }
+  .row-today { display: flex; align-items: center; gap: 8px; line-height: 1.1; }
   .row-today .v {
-    font-size: 25px; font-weight: 600; letter-spacing: -.7px;
-    color: var(--accent); font-variant-numeric: tabular-nums;
+    font-size: 27px; font-weight: 700; letter-spacing: -.8px;
+    background: linear-gradient(135deg, var(--text) 30%, var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    font-variant-numeric: tabular-nums;
   }
   .row-today .cost {
-    margin-left: auto; font-size: 12px; color: var(--muted);
+    margin-left: auto; padding: 2px 7px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }
-  .row-today .cost.none { color: var(--faint); font-size: 10.5px; }
+  .row-today .cost.none { color: var(--faint); background: var(--surface2); border-color: var(--border); font-weight: 400; }
   .label { font-size: 10.5px; color: var(--faint); line-height: 1.2; }
 
   .row-sub { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums;
@@ -68,18 +82,33 @@ try {
   .row-sub b { color: var(--text); font-weight: 600; }
 
   /* 7 日迷你柱：纯 flex + 高度百分比，不引入图表库。
-     flex:1 吃掉剩余高度——浮窗被拉高时柱子跟着变高，而不是留一块空白。 */
-  .spark { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-top: 1px;
-           flex: 1 1 auto; min-height: 26px; max-height: 64px; }
+     flex:1 吃掉剩余高度——浮窗被拉高时柱子跟着变高，而不是留一块空白。
+     今日柱渐变 + 微光，与灰调历史柱拉开层次。 */
+  .spark { display: flex; align-items: flex-end; gap: 4px; height: 30px; margin-top: 1px;
+           flex: 1 1 auto; min-height: 24px; max-height: 60px; }
   .spark .bar {
-    flex: 1; min-height: 2px; border-radius: 2px 2px 0 0;
+    flex: 1; min-height: 3px; border-radius: 3px 3px 1px 1px;
     background: color-mix(in srgb, var(--accent) 38%, var(--surface2));
-    transition: height .3s ease;
+    transition: height .3s ease, background .15s;
     cursor: pointer;
   }
-  .spark .bar.last { background: var(--accent); }
+  .spark .bar.last {
+    background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 65%, transparent));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 38%, transparent);
+  }
   .spark .bar:hover { background: var(--accent); }
-  .spark .bar.void { background: transparent; cursor: default; }
+  /* A5：空柱子仍然可点击（打开面板看那天为什么空），所以指针必须是 pointer，
+     提示文案也写「点击查看」——样式、文案、行为三者一致。 */
+  .spark .bar.void {
+    background: color-mix(in srgb, var(--border-strong) 55%, transparent);
+    cursor: pointer;
+  }
+  .spark .bar.void:hover { background: var(--accent); opacity: .7; }
+
+  /* 多色 Harness 占比条：与下方图例同色（colorFor），一屏回答「用量都是谁产生的」 */
+  .hbar { display: flex; height: 4px; gap: 2px; border-radius: 99px; overflow: hidden;
+          background: var(--surface2); flex: none; }
+  .hbar i { display: block; height: 100%; border-radius: 99px; }
 
   .row-harness { display: flex; gap: 8px; font-size: 10px; color: var(--muted);
                  font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -88,13 +117,18 @@ try {
   .row-harness i { width: 6px; height: 6px; border-radius: 50%; display: block; flex: none; }
 
   .foot { display: flex; align-items: center; gap: 5px;
-          font-size: 10px; color: var(--faint); }
+          font-size: 10px; color: var(--faint); min-width: 0; }
+  /* 「12,412 条未定价」这种长文本会把「面板 ↗」挤出去：状态文字自己截断，
+     按钮永不收缩（flex: none）。 */
+  .foot #status { flex: 0 1 auto; min-width: 0; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; }
   .foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex: none; }
   .foot .dot.warn { background: var(--amber); }
   .foot .dot.err { background: var(--red); }
-  .foot .spacer { flex: 1; }
+  .foot .spacer { flex: 1 1 2px; min-width: 2px; }
   .foot button { padding: 0 5px; font-size: 10px; background: transparent;
-                 border-color: transparent; color: var(--faint); }
+                 border-color: transparent; color: var(--faint);
+                 flex: none; white-space: nowrap; }
   .foot button:hover { color: var(--text); }
 
   /* 右键菜单 */
@@ -135,6 +169,8 @@ try {
     <button class="iconbtn" id="btnClose" title="退出">✕</button>
   </div>
 
+  <div class="budget-bar" id="budgetBar" hidden title=""><i id="budgetFill"></i></div>
+
   <div class="body">
     <div class="label">今日</div>
     <div class="row-today">
@@ -147,6 +183,8 @@ try {
     </div>
 
     <div class="spark" id="spark" title="近 7 天用量"></div>
+
+    <div class="hbar" id="hbar"></div>
 
     <div class="row-harness" id="harness"></div>
 
@@ -162,6 +200,7 @@ try {
 <div class="menu" id="menu">
   <button data-act="refresh">↻ 刷新</button>
   <button data-act="panel">↗ 打开面板</button>
+  <button data-act="theme">◐ 切换主题</button>
   <button data-act="top">⇧ 置顶</button>
   <button data-act="autostart">⇧ 开机自启</button>
   <div class="sep"></div>
@@ -184,12 +223,16 @@ function renderSpark(daily) {
   (daily || []).forEach(r => { map[r.date] = r.tokens || 0; });
   const vals = days.map(d => map[d] || 0);
   const max = Math.max(...vals, 1);
-  // C8：柱子带 data-date，点击跳到面板并筛选到那一天
+  // C8：柱子带 data-date，点击跳到面板并筛选到那一天。
+  // A5：空柱子同样可点（进面板能看到那天确实没用量），title 文案也相应区分。
   el.innerHTML = vals.map((v, i) => {
     const pct = Math.max(3, Math.round(v / max * 100));
     const cls = "bar" + (i === vals.length - 1 ? " last" : "") + (v ? "" : " void");
+    const tip = v
+      ? `${days[i]} · ${compact(v)}（点击打开面板）`
+      : `${days[i]} · 当天无用量（点击查看）`;
     return `<div class="${cls}" data-date="${esc(days[i])}" style="height:${pct}%"
-      title="${esc(days[i])} · ${esc(compact(v))}（点击打开面板）"></div>`;
+      title="${esc(tip)}"></div>`;
   }).join("");
 }
 
@@ -213,16 +256,42 @@ function render(summary, daily, meta) {
 
   renderSpark(daily);
 
-  const hs = (summary.by_harness || []).slice(0, 2);
+  // 多色占比条（Top 4 harness）+ 图例（Top 2）：颜色与面板一致（colorFor）
+  const hsAll = summary.by_harness || [];
+  const hsTot = hsAll.reduce((s, h) => s + (h.tokens || 0), 0) || 1;
+  document.getElementById("hbar").innerHTML = hsAll.slice(0, 4).map(h =>
+    `<i style="width:${Math.max(4, Math.round((h.tokens || 0) / hsTot * 100))}%;background:${colorFor(h.harness || "-")}" title="${esc(h.harness)}: ${compact(h.tokens)}"></i>`
+  ).join("");
+
+  const hs = hsAll.slice(0, 2);
   document.getElementById("harness").innerHTML = hs.map(h =>
     `<span><i style="background:${colorFor(h.harness || "-")}"></i>${esc(h.harness || "-")} ${esc(compact(h.tokens))}</span>`
   ).join("");
 
+  // U6：月度预算进度微条。数据与面板预算 chip 严格同源（/api/summary 的 month/budget）。
+  const bUsd = (summary.budget || {}).monthly_usd;
+  const mSpent = (summary.month || {}).cost || 0;
+  const bBar = document.getElementById("budgetBar");
+  if (bBar) {
+    if (bUsd && bUsd > 0) {
+      const pct = Math.min(100, Math.round(mSpent / bUsd * 100));
+      bBar.hidden = false;
+      bBar.className = "budget-bar" + (mSpent >= bUsd ? " err" : mSpent >= bUsd * 0.8 ? " warn" : "");
+      bBar.title = `本月预算：$${mSpent.toFixed(2)} / $${bUsd}（${(mSpent / bUsd * 100).toFixed(1)}%）`;
+      document.getElementById("budgetFill").style.width = pct + "%";
+    } else {
+      bBar.hidden = true;
+    }
+  }
+
+  // 状态点三级：超支红 > 未定价黄 > 正常绿（超支比缺价格更要紧，优先占住红）
   const unpriced = all.unpriced || 0;
+  const overBudget = bUsd && bUsd > 0 && mSpent >= bUsd;
   const dot = document.getElementById("dot");
-  dot.className = "dot" + (unpriced > 0 ? " warn" : "");
-  document.getElementById("status").textContent =
-    unpriced > 0 ? `${fmt(unpriced)} 条未定价` : "数据正常";
+  dot.className = "dot" + (overBudget ? " err" : unpriced > 0 ? " warn" : "");
+  document.getElementById("status").textContent = overBudget
+    ? `本月已超支 ${money(mSpent - bUsd)}`
+    : unpriced > 0 ? `${fmt(unpriced)} 条未定价` : "数据正常";
 
   const now = new Date();
   document.getElementById("clock").textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
@@ -287,13 +356,14 @@ function applyMenuState() {
   if (autoBtn) autoBtn.textContent = (state.autostart ? "✓" : "⇧") + " 开机自启";
 }
 
-async function syncState() {
+async function syncState(showNotice) {
   const st = await call("get_state");
   if (st && typeof st === "object") {
     state.top = !!st.on_top;
     state.autostart = !!st.autostart;
-    // 首启默认开启自启时后端会带一条 notice：这里 toast 一次，保证「可见地告知」
-    if (st.notice) toast(st.notice);
+    // 首启默认开启自启时后端会带一条 notice：只在启动时 toast 一次（showNotice），
+    // 右键菜单每次打开都会调 syncState，不能每点一次右键就重复弹一遍。
+    if (showNotice && st.notice) toast(st.notice);
   }
   applyMenuState();
 }
@@ -301,20 +371,27 @@ async function syncState() {
 /* ---------- 交互 ---------- */
 function bind() {
   const tb = document.getElementById("titlebar");
-  let down = null;
 
+  // 拖动：用 pywebview 官方 easy_drag 的同款算法（screenX - clientX → window.move），
+  // 不再用 WM_NCLBUTTONDOWN 伪装系统拖动——js_api 在工作线程执行，跨线程
+  // SendMessage 的按键状态不对，系统移动循环会直接退出（就是之前拖不动的原因）。
   tb.addEventListener("mousedown", e => {
-    if (e.target.closest("button")) return;
-    down = { x: e.screenX, y: e.screenY, moved: false };
+    if (e.button !== 0 || e.target.closest("button")) return;
+    const drag = { cx: e.clientX, cy: e.clientY, last: 0 };
+    const onMove = ev => {
+      const now = performance.now();
+      if (now - drag.last < 16) return;   // 节流，避免桥调用排队
+      drag.last = now;
+      call("move_to", ev.screenX - drag.cx, ev.screenY - drag.cy);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      call("save_position");
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   });
-  // 拖动：交给系统（WM_NCLBUTTONDOWN），只在起点没按在按钮上时触发
-  tb.addEventListener("mousemove", e => {
-    if (!down || down.moved) return;
-    if (Math.abs(e.screenX - down.x) + Math.abs(e.screenY - down.y) < 3) return;
-    down.moved = true;
-    call("begin_drag");
-  });
-  document.addEventListener("mouseup", () => { down = null; });
   tb.addEventListener("dblclick", e => {
     if (e.target.closest("button")) return;
     call("open_panel");
@@ -335,7 +412,9 @@ function bind() {
   const menu = document.getElementById("menu");
   document.addEventListener("contextmenu", e => {
     e.preventDefault();
-    applyMenuState();
+    // A9：打开菜单前重新问后端要状态，别用缓存——用户可能手动删了自启快捷方式，
+    // 或另一个实例改了置顶；只 applyMenuState() 会把过期的 ✓ 画出来。
+    syncState();
     menu.classList.add("show");
     const pad = 6;
     let x = e.clientX, y = e.clientY;
@@ -369,7 +448,22 @@ function bind() {
         applyMenuState();
         toast(state.autostart ? "已开启开机自启" : "已关闭开机自启");
       });
+    } else if (act === "theme") {
+      // U6：浮窗内切换主题。写 localStorage["td-theme"] 让面板也同步
+      // （同源共享 localStorage，面板监听 storage 事件实时跟随）。
+      const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+      localStorage.setItem("td-theme", next);
+      document.documentElement.dataset.theme = next;
+      toast(next === "light" ? "已切换到浅色主题" : "已切换到深色主题");
     } else if (act === "quit") call("quit");
+  });
+
+  // U6：面板切换主题时浮窗实时跟随（storage 事件只在「其他」窗口触发，
+  // 自己写入不会重复响应；key 必须匹配，且只认合法值）。
+  window.addEventListener("storage", e => {
+    if (e.key === "td-theme" && (e.newValue === "light" || e.newValue === "dark")) {
+      document.documentElement.dataset.theme = e.newValue;
+    }
   });
 
   // A9：Esc 二次确认（无边框小窗里 Esc 是高频误按键，一按就没进程了）
@@ -398,7 +492,7 @@ function bind() {
 /* ---------- 启动 ---------- */
 bind();
 applyMenuState();
-syncState();
+syncState(true);
 refresh(true);
 startPolling();
 // 每 30s 顺手更新一次时钟（即使没拉到新数据）

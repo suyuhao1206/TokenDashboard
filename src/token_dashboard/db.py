@@ -15,6 +15,9 @@ from urllib.parse import quote
 from .models import COLUMNS, UsageEvent
 
 BUSY_TIMEOUT_MS = 5000
+# CSV 导出上限：几十万行时 fetchall + 拼字符串会明显吃内存，也拖慢响应。
+# 到达上限时调用方应在响应头里提示（X-Export-Truncated），引导用户先加筛选。
+EXPORT_LIMIT = 200_000
 
 
 class DatabaseMissing(FileNotFoundError):
@@ -206,8 +209,14 @@ class Store:
 
     # ---------- 通用过滤 ----------
     @staticmethod
-    def _filter(since=None, until=None, harness=None, channel=None, model=None):
-        frag = ""
+    def _filter(since=None, until=None, harness=None, channel=None, model=None, session_id=None):
+        """构造 WHERE 片段。所有查询共用同一套口径。
+
+        `local_date IS NOT NULL` 是统一的统计基线：没有本地日期的事件（时间戳缺失 /
+        无法解析的旧库遗留行）不参与任何按天统计，否则 KPI、请求表、活跃时段会和
+        日报对不上账。把条件收在这里，新增查询自动继承，不用每处手写一遍。
+        """
+        frag = " AND local_date IS NOT NULL"
         args: list = []
         if since:
             frag += " AND local_date >= ?"
@@ -224,11 +233,15 @@ class Store:
         if model:
             frag += " AND model = ?"
             args.append(model)
+        if session_id:
+            frag += " AND session_id = ?"
+            args.append(session_id)
         return frag, args
 
     # ---------- 查询 ----------
-    def daily_report(self, since=None, until=None, harness=None, model=None) -> list[sqlite3.Row]:
-        frag, args = self._filter(since, until, harness, model=model)
+    def daily_report(self, since=None, until=None, harness=None, model=None,
+                     session_id=None) -> list[sqlite3.Row]:
+        frag, args = self._filter(since, until, harness, model=model, session_id=session_id)
         sql = f"""
         SELECT local_date AS date,
                SUM(input_tokens) AS input_tokens,
@@ -241,20 +254,21 @@ class Store:
                COUNT(*) AS events,
                SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END) AS unpriced
         FROM usage_events
-        WHERE local_date IS NOT NULL{frag}
+        WHERE 1=1{frag}
         GROUP BY local_date ORDER BY local_date
         """
         with self._lock:
             return self.conn.execute(sql, args).fetchall()
 
-    def daily_by(self, dim="harness", since=None, until=None, harness=None, model=None) -> list[sqlite3.Row]:
+    def daily_by(self, dim="harness", since=None, until=None, harness=None, model=None,
+                 session_id=None) -> list[sqlite3.Row]:
         col = _DIMS.get(dim, "harness")
-        frag, args = self._filter(since, until, harness, model=model)
+        frag, args = self._filter(since, until, harness, model=model, session_id=session_id)
         sql = f"""
         SELECT local_date AS date, COALESCE({col}, '-') AS key,
                {_TOKENS} AS tokens, SUM(cost_usd) AS cost
         FROM usage_events
-        WHERE local_date IS NOT NULL{frag}
+        WHERE 1=1{frag}
         GROUP BY local_date, key ORDER BY local_date
         """
         with self._lock:
@@ -267,7 +281,7 @@ class Store:
         SELECT COALESCE({col}, '-') AS key, COUNT(*) AS events,
                {_TOKENS} AS tokens, SUM(cost_usd) AS cost
         FROM usage_events
-        WHERE local_date IS NOT NULL{frag}
+        WHERE 1=1{frag}
         GROUP BY key ORDER BY tokens DESC LIMIT ?
         """
         args = args + [limit]
@@ -305,7 +319,7 @@ class Store:
             FROM usage_events
             -- 与日报/KPI/热力图对齐：local_date 为空的事件不参与任何按天统计，
             -- 会话明细里也不显示（否则两个区块对不上账）
-            WHERE local_date IS NOT NULL{frag}
+            WHERE 1=1{frag}
             WINDOW w AS (PARTITION BY {sid}, harness)
         )
         WHERE rn = 1
@@ -320,7 +334,7 @@ class Store:
         with self._lock:
             row = self.conn.execute(
                 f"SELECT COUNT(*) AS events, {_TOKENS} AS tokens, "
-                "SUM(cost_usd) AS cost FROM usage_events"
+                "SUM(cost_usd) AS cost FROM usage_events WHERE local_date IS NOT NULL"
             ).fetchone()
         return dict(row) if row else {}
 
@@ -328,7 +342,19 @@ class Store:
         with self._lock:
             return self.conn.execute(
                 f"SELECT harness, COUNT(*) AS events, {_TOKENS} AS tokens, "
-                "SUM(cost_usd) AS cost FROM usage_events GROUP BY harness ORDER BY tokens DESC"
+                "SUM(cost_usd) AS cost FROM usage_events "
+                "WHERE local_date IS NOT NULL GROUP BY harness ORDER BY tokens DESC"
+            ).fetchall()
+
+    def unpriced_models(self, limit: int = 50) -> list[sqlite3.Row]:
+        """未定价的模型清单（按事件数倒序）：面板「未定价」chip 展开用。"""
+        with self._lock:
+            return self.conn.execute(
+                "SELECT COALESCE(model, '-') AS model, COUNT(*) AS events, "
+                f"{_TOKENS} AS tokens FROM usage_events "
+                "WHERE local_date IS NOT NULL AND cost_usd IS NULL "
+                "GROUP BY model ORDER BY events DESC LIMIT ?",
+                (limit,),
             ).fetchall()
 
     def totals(self, since=None, until=None, harness=None, model=None) -> dict:
@@ -347,7 +373,15 @@ class Store:
         )
         with self._lock:
             row = self.conn.execute(sql, args).fetchone()
-        return dict(row) if row else {}
+        data = dict(row) if row else {}
+        # 没有任何事件时 SUM 全是 NULL，接口里统一回 0：前端不用为「空区间」
+        # 额外写一堆 isNum 判断（成本仍保留 NULL 语义——有事件但没定价时为 null）。
+        if not data.get("events"):
+            for key in ("tokens", "input", "cache_read", "cache_write", "output",
+                        "reasoning", "cost", "unpriced"):
+                data[key] = 0
+            data.setdefault("events", 0)
+        return data
 
     # ---------- 最近请求（分页） ----------
     # 排序白名单：绝不能把用户传入的字符串拼进 SQL。key -> (表达式, 是否数值)
@@ -371,8 +405,8 @@ class Store:
 
     def recent_requests(self, page: int = 1, size: int = 20,
                         since=None, until=None, harness=None, model=None,
-                        sort="ts", order="desc") -> dict:
-        frag, args = self._filter(since, until, harness, model=model)
+                        sort="ts", order="desc", session_id=None) -> dict:
+        frag, args = self._filter(since, until, harness, model=model, session_id=session_id)
         page = max(1, int(page))
         size = min(200, max(1, int(size)))
         order_sql = self._order_by(sort, order)
@@ -392,18 +426,25 @@ class Store:
                 "rows": [dict(r) for r in rows], "sort": sort, "order": order}
 
     def export_requests(self, since=None, until=None, harness=None, model=None,
-                        sort="ts", order="desc") -> list[sqlite3.Row]:
-        """CSV 导出用：同一套过滤与排序，但不分页。"""
-        frag, args = self._filter(since, until, harness, model=model)
+                        sort="ts", order="desc", session_id=None) -> tuple[list[sqlite3.Row], bool]:
+        """CSV 导出用：同一套过滤与排序，但不分页。
+
+        返回 (rows, truncated)。最多导出 EXPORT_LIMIT 行——用 LIMIT n+1 探测是否
+        还有更多数据，调用方据此在响应头里标记截断。全量 fetchall 在几十万行时
+        内存和响应时间都会明显恶化。
+        """
+        frag, args = self._filter(since, until, harness, model=model, session_id=session_id)
         order_sql = self._order_by(sort, order)
         with self._lock:
-            return self.conn.execute(
+            rows = self.conn.execute(
                 "SELECT ts, local_date, harness, model, raw_model, channel, project, "
                 "input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, "
                 "reasoning_tokens, cost_usd, session_id "
-                "FROM usage_events WHERE 1=1" + frag + f" ORDER BY {order_sql}",
-                args,
+                "FROM usage_events WHERE 1=1" + frag + f" ORDER BY {order_sql} LIMIT ?",
+                args + [EXPORT_LIMIT + 1],
             ).fetchall()
+        truncated = len(rows) > EXPORT_LIMIT
+        return rows[:EXPORT_LIMIT], truncated
 
     # ---------- 渠道视图 ----------
     def channel_daily_by_model(self, since=None, until=None, channels=None) -> list[sqlite3.Row]:

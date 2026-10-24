@@ -341,14 +341,16 @@ class Api:
         self.autostart_notice: str | None = None
 
     # --- 窗口操作 ---
-    def begin_drag(self) -> bool:
-        """无边框窗口拖动：把这次点击伪装成"点在标题栏"上，交给系统接管。"""
+    def move_to(self, x: float, y: float) -> bool:
+        """把窗口移动到指定位置（逻辑像素，与 create_window(x=, y=) 同口径）。
+
+        拖动由前端按 pywebview 官方 easy_drag 的同款算法逐帧调用本方法：
+        目标位置 = event.screenX - 按下那一刻的 event.clientX。
+        不要改回 WM_NCLBUTTONDOWN：js_api 在独立工作线程执行（util.js_bridge_call），
+        跨线程 SendMessage 伪装的按键状态不对，系统移动循环会直接退出（拖不动）。
+        """
         try:
-            hwnd = int(self._window.native.Handle.ToInt64())
-            user32 = ctypes.windll.user32
-            user32.ReleaseCapture()
-            # WM_NCLBUTTONDOWN(0xA1) + HTCAPTION(2)
-            user32.SendMessageW(hwnd, 0xA1, 2, 0)
+            self._window.move(int(round(x)), int(round(y)))
             return True
         except Exception:
             return False
@@ -447,12 +449,99 @@ def _dpi_scale() -> float:
         return 1.0
 
 
+def _virtual_screen() -> tuple[int, int, int, int] | None:
+    """整个虚拟屏幕（所有显示器拼起来的外接矩形）的 (x, y, w, h)。
+
+    非 Windows 或取不到时返回 None（调用方按「不做检查」处理）。
+    """
+    if os.name != "nt":
+        return None
+    try:
+        u32 = ctypes.windll.user32
+        vx = u32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+        vy = u32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
+        vw = u32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
+        vh = u32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
+        if vw > 0 and vh > 0:
+            return vx, vy, vw, vh
+    except Exception:
+        pass
+    return None
+
+
+def _clamp_to_screen(x: int | None, y: int | None, w: int, h: int) -> tuple[int | None, int | None]:
+    """校验上次保存的窗口坐标是否还在当前虚拟屏幕内（B7）。
+
+    config/widget-web.json 记住了上次关闭时的位置。浮窗放在副屏（如 x=2300）后
+    拔掉副屏再启动，窗口会生成在屏幕外——用户什么都看不见，托盘也调不回来。
+    只要左上角附近（80x40 像素）保证可见就算有效，其余交还系统居中。
+    """
+    if x is None or y is None:
+        return x, y
+    vs = _virtual_screen()
+    if not vs:
+        return x, y
+    vx, vy, vw, vh = vs
+    if x < vx - w + 80 or x > vx + vw - 80 or y < vy or y > vy + vh - 40:
+        return None, None
+    return x, y
+
+
 # pywebview 的 width/height 与 WebView2 实际视口之间有一个固定偏移：
 # 实测（DPR=1.5，frameless）请求 260x246 只得到 246x209 的视口，宽少 14、高少 37。
 # 这个偏移来自 WinForms 窗口的非客户区，与 DPI 无关，所以直接加上即可。
 # 注意它只是"起点"：真实值由 fit_viewport() 读回视口后迭代校正，不依赖这个常数。
 VIEWPORT_INSET_X = 14
 VIEWPORT_INSET_Y = 37
+
+
+def fit_viewport_steps(
+    target_w: int, target_h: int, read_viewport, read_size, resize, sleep, say,
+    max_rounds: int = 3,
+) -> bool:
+    """把视口校正到目标 CSS 尺寸（纯逻辑，与 pywebview 解耦，便于测试）。
+
+    A8：单位必须统一成**逻辑像素**。
+    - `innerWidth/innerHeight` 是 CSS 像素；
+    - pywebview 的 `window.width/height` 内部按窗口 DPI 把物理值换算成逻辑值
+      （winforms.get_size），与 create_window(width=) / window.resize() 同口径；
+    - `window.native.Width/Height` 是**物理像素**，直接拿它加 CSS 差值，在
+      125%/150%/200% 下差值会被 dpr 放大，3 轮都收敛不了（甚至越修越大）。
+
+    read_viewport() -> (w, h, dpr)
+    read_size() -> (w, h)          逻辑像素
+    resize(w, h) / sleep(s) / say(msg)
+    返回是否收敛到 ±1 以内。误差不再变小就提前退出，避免来回抖动。
+    """
+    last_err = None
+    for i in range(max_rounds):
+        try:
+            vw, vh, dpr = read_viewport()
+        except Exception as exc:
+            say(f"fit_viewport: 读视口失败 {exc!r}")
+            return False
+        dw, dh = target_w - int(vw), target_h - int(vh)
+        say(f"视口 #{i}: {vw}x{vh} dpr={dpr} 目标 {target_w}x{target_h}")
+        if abs(dw) <= 1 and abs(dh) <= 1:
+            say("视口已匹配")
+            return True
+        err = abs(dw) + abs(dh)
+        if last_err is not None and err >= last_err:
+            say(f"视口校正停滞（误差 {err}px），保留当前尺寸")
+            return False
+        last_err = err
+        try:
+            cur_w, cur_h = read_size()
+            new_w = max(MIN_WIDTH, int(cur_w) + dw)
+            new_h = max(MIN_HEIGHT, int(cur_h) + dh)
+            say(f"resize {cur_w}x{cur_h} -> {new_w}x{new_h}")
+            resize(new_w, new_h)
+        except Exception as exc:
+            say(f"fit_viewport 失败: {exc!r}")
+            return False
+        sleep(0.4)
+    say("视口校正达到迭代上限，保留当前尺寸")
+    return False
 
 
 def _make_tray_icon(api: "Api", window) -> object | None:
@@ -473,6 +562,15 @@ def _make_tray_icon(api: "Api", window) -> object | None:
               fill=(59, 130, 246, 255))
 
     def show(_icon=None, _item=None):
+        try:
+            # 上次窗口可能停在已经拔掉的副屏上：先钳制回可见区域再显示，
+            # 否则「托盘点显示浮窗」点了没反应（窗口其实在屏幕外）。
+            if (None, None) == _clamp_to_screen(
+                int(window.x), int(window.y), int(window.width), int(window.height)
+            ):
+                window.move(120, 120)
+        except Exception:
+            pass
         try:
             window.show()
             window.restore()
@@ -650,7 +748,11 @@ def run_widget(cfg: dict | None = None, **kwargs) -> int:
         api.autostart_notice = "已默认开启开机自启（右键菜单可关闭）"
     w = int(state.get("width") or WIDGET_DEFAULTS["width"])
     h = int(state.get("height") or WIDGET_DEFAULTS["height"])
-    x, y = state.get("x"), state.get("y")
+    x, y = _clamp_to_screen(state.get("x"), state.get("y"), w, h)
+    if (x, y) != (state.get("x"), state.get("y")):
+        say(f"保存的位置 ({state.get('x')},{state.get('y')}) 已不在当前屏幕范围内，改为系统居中")
+        state["x"] = state["y"] = None
+        save_widget_state(state)
 
     window = webview.create_window(
         "Token Widget",
@@ -661,7 +763,7 @@ def run_widget(cfg: dict | None = None, **kwargs) -> int:
         x=x,
         y=y,
         frameless=True,
-        easy_drag=False,        # 拖动由我们自己的标题栏 + api.begin_drag 处理
+        easy_drag=False,        # 拖动由标题栏 mousedown + api.move_to 处理（官方 easy_drag 同款算法）
         on_top=bool(state.get("on_top", True)),
         background_color="#0d1017",
         text_select=False,
@@ -670,35 +772,25 @@ def run_widget(cfg: dict | None = None, **kwargs) -> int:
     api._window = window
 
     def fit_viewport(target_w: int, target_h: int) -> None:
-        """把 WebView2 视口校正到目标 CSS 尺寸。
+        """把 WebView2 视口校正到目标 CSS 尺寸（A8，算法见 fit_viewport_steps）。"""
 
-        pywebview 的 width/height 与 WebView2 的 CSS 视口之间既有 DPI 缩放
-        又有非客户区偏移，比例随系统缩放变化，硬编码不可靠。
-        这里读一次实际视口、按差额调整窗口尺寸，最多迭代两轮。
-        """
-        for i in range(3):
-            try:
-                raw = window.evaluate_js(
-                    "JSON.stringify([innerWidth, innerHeight, devicePixelRatio])"
-                )
-                if not raw:
-                    say("fit_viewport: 读不到视口")
-                    return
-                vw, vh, dpr = json.loads(raw)
-                say(f"视口 #{i}: {vw}x{vh} dpr={dpr} 目标 {target_w}x{target_h}")
-                dw, dh = target_w - int(vw), target_h - int(vh)
-                if abs(dw) <= 1 and abs(dh) <= 1:
-                    say("视口已匹配")
-                    return
-                cur = window.native
-                new_w = max(MIN_WIDTH, int(cur.Width) + dw)
-                new_h = max(MIN_HEIGHT, int(cur.Height) + dh)
-                say(f"resize {cur.Width}x{cur.Height} -> {new_w}x{new_h}")
-                window.resize(new_w, new_h)
-                time.sleep(0.4)
-            except Exception as exc:
-                say(f"fit_viewport 失败: {exc!r}")
-                return
+        def read_viewport():
+            raw = window.evaluate_js(
+                "JSON.stringify([innerWidth, innerHeight, devicePixelRatio])"
+            )
+            if not raw:
+                raise RuntimeError("读不到视口")
+            vw, vh, dpr = json.loads(raw)
+            return vw, vh, dpr
+
+        fit_viewport_steps(
+            target_w, target_h,
+            read_viewport=read_viewport,
+            read_size=lambda: (window.width, window.height),   # 逻辑像素
+            resize=window.resize,
+            sleep=time.sleep,
+            say=say,
+        )
 
     def watch_position() -> None:
         """定期记下窗口位置：窗口被系统关闭时也能保存（不依赖 closing 事件）。
